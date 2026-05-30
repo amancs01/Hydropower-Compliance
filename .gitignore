@@ -1,5 +1,7 @@
 
 # Python environment - machine specific, never share
+.venv/
+venv/
 backend/.ven/
 backend/.venv/
 backend/__pycache__/
@@ -12,4 +14,14 @@ backend/*.db-shm
 backend/*.db-wal
 
 # Secret keys - NEVER share
+.env
+*.env
+!.env.example
+!backend/.env.example
 backend/.env
+
+# Frontend/build artifacts
+node_modules/
+dist/
+build/
+.vite/

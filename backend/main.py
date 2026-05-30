@@ -1,14 +1,16 @@
+import hashlib
 import json
 import logging
+from datetime import datetime, timedelta
 
-from fastapi import Depends, FastAPI, File, HTTPException, UploadFile
+from fastapi import Depends, FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 
 from config import settings
 from database.connection import get_db
-from database.models import AuditLog, ComplianceAnalysis, ComplianceFinding, ComplianceStandardResult, Document, DocumentChunk, IFCRequirement, Project, ReportClaim
+from database.models import Action, AuditLog, ComplianceAnalysis, ComplianceFinding, ComplianceStandardResult, Document, DocumentChunk, IFCRequirement, Project, ReportClaim
 from database.seed import ensure_seed_schema
 from routes import action_routes, audit_routes, auth_routes, evidence_routes, grievance_routes, project_routes, validation_routes
 from services.auth_service import require_roles
@@ -101,6 +103,33 @@ def get_or_create_demo_project(db: Session) -> Project:
     return project
 
 
+def get_project_or_error(db: Session, project_id: str) -> Project:
+    project = db.query(Project).filter(Project.id == project_id).first()
+    if not project:
+        raise HTTPException(
+            status_code=404,
+            detail={"status": "error", "error_code": "NOT_FOUND", "message": "Project not found."},
+        )
+    return project
+
+
+def action_title_for_standard(standard: str) -> str:
+    return {
+        "PS1": "Upload ESMS and stakeholder engagement evidence",
+        "PS2": "Submit worker safety and wage evidence",
+        "PS3": "Submit pollution and waste management evidence",
+        "PS4": "Submit community safety and emergency preparedness evidence",
+        "PS5": "Submit compensation and livelihood restoration evidence",
+        "PS6": "Submit biodiversity and environmental-flow monitoring evidence",
+        "PS7": "Submit Indigenous Peoples screening or consultation evidence",
+        "PS8": "Submit cultural heritage screening or chance-find procedure",
+    }.get(standard, "Submit evidence for compliance gap")
+
+
+def due_days_for_severity(severity: str) -> int | None:
+    return {"Critical": 7, "High": 14, "Medium": 30}.get(severity)
+
+
 def seed_ifc_requirements(db: Session):
     if db.query(IFCRequirement).count() > 0:
         return
@@ -123,8 +152,11 @@ def api_health():
 @app.post("/api/pdf/extract", response_model=PdfExtractResponse)
 async def extract_pdf(
     file: UploadFile = File(...),
+    project_id: str = Form(...),
+    db: Session = Depends(get_db),
     user=Depends(require_roles(["Developer", "Consultant", "Admin"])),
 ):
+    get_project_or_error(db, project_id)
     invalid = validate_pdf_upload(file)
     if invalid:
         return invalid
@@ -158,6 +190,7 @@ async def extract_pdf(
 @app.post("/api/compliance/analyze")
 async def analyze_compliance_pdf(
     file: UploadFile = File(...),
+    project_id: str = Form(...),
     db: Session = Depends(get_db),
     user=Depends(require_roles(["Developer", "Consultant", "Admin"])),
 ):
@@ -168,6 +201,10 @@ async def analyze_compliance_pdf(
     pdf_bytes = await file.read()
     if not pdf_bytes:
         return error_response("EMPTY_FILE", "Uploaded PDF is empty.", 400)
+    if not project_id:
+        return error_response("PROJECT_REQUIRED", "Select a project before running analysis.", 400)
+    project = get_project_or_error(db, project_id)
+    file_hash = hashlib.sha256(pdf_bytes).hexdigest()
 
     try:
         pages_text, full_text = extract_pdf_pages(pdf_bytes)
@@ -216,16 +253,19 @@ async def analyze_compliance_pdf(
         "Compliance model returned standards: %s",
         {key.upper(): getattr(model_result, key).analysis_status for key in STANDARD_KEYS},
     )
-    project = get_or_create_demo_project(db)
-
     document = Document(
         project_id=project.id,
         filename=file.filename or "uploaded.pdf",
+        original_filename=file.filename or "uploaded.pdf",
+        file_size=len(pdf_bytes),
+        mime_type=file.content_type or "application/pdf",
+        sha256_hash=file_hash,
         document_type="uploaded_pdf",
         pages=len(pages_text),
         text_length=len(full_text),
         contains_nepali=contains_nepali,
         uploaded_by="Frontend user",
+        verification_status="uploaded",
         upload_status="extracted",
     )
     db.add(document)
@@ -266,6 +306,7 @@ async def analyze_compliance_pdf(
     db.refresh(analysis)
 
     findings = []
+    created_actions = []
     for key in STANDARD_KEYS:
         standard = key.upper()
         finding = getattr(model_result, key)
@@ -293,6 +334,7 @@ async def analyze_compliance_pdf(
                 risk_level=finding.severity if finding.analysis_status == "analyzed" else None,
             )
         )
+        db_finding = None
         if finding.analysis_status == "analyzed" and finding.score is not None:
             db_finding = ComplianceFinding(
                 **result_payload,
@@ -300,6 +342,23 @@ async def analyze_compliance_pdf(
                 verification_status="ai_generated",
             )
             db.add(db_finding)
+            db.flush()
+            days = due_days_for_severity(finding.severity)
+            if days is not None:
+                due = (datetime.utcnow() + timedelta(days=days)).date().isoformat()
+                db_action = Action(
+                    project_id=project.id,
+                    finding_id=db_finding.id,
+                    owner="Project Compliance Team",
+                    title=action_title_for_standard(standard),
+                    description="AI-created action from document analysis. Review and update owner/status as needed.",
+                    severity=finding.severity,
+                    status="open",
+                    due_date=due,
+                )
+                db.add(db_action)
+                db.flush()
+                created_actions.append(db_action)
         findings.append(finding_to_response(standard, finding))
 
     db.commit()
@@ -332,6 +391,16 @@ async def analyze_compliance_pdf(
             entity_id=str(analysis.id),
             detail=f"{len(report_claims)} report claims extracted as document_claim_only.",
         ))
+    if created_actions:
+        db.add(AuditLog(
+            project_id=project.id,
+            actor="HydroComply AI",
+            actor_role="System",
+            action="Corrective actions created",
+            entity_type="actions",
+            entity_id=str(analysis.id),
+            detail=f"{len(created_actions)} AI-created corrective actions linked to critical/high/medium findings.",
+        ))
     db.commit()
 
     analyzed_count = len([finding for finding in findings if finding.get("analysis_status") == "analyzed" and finding.get("score") is not None])
@@ -340,17 +409,12 @@ async def analyze_compliance_pdf(
     return {
         "status": "success",
         "analysis_id": str(analysis.id),
-        "document": {
-            "id": str(document.id),
-            "filename": document.filename,
-            "pages": document.pages,
-            "text_length": document.text_length,
-            "contains_nepali": document.contains_nepali,
-        },
+        "document": document_to_response(document),
         "scores": scores,
         "summary": model_result.summary,
         "findings": findings,
         "report_claims": report_claims,
+        "actions_created": len(created_actions),
         "raw_model_used": {
             "translation_model": settings.groq_translation_model if contains_nepali else "not_used",
             "compliance_model": model_used,
@@ -361,7 +425,11 @@ async def analyze_compliance_pdf(
 
 
 @app.get("/api/compliance/analyses/{analysis_id}", response_model=ComplianceAnalyzeResponse)
-def get_analysis(analysis_id: str, db: Session = Depends(get_db)):
+def get_analysis(
+    analysis_id: str,
+    db: Session = Depends(get_db),
+    user=Depends(require_roles(["Developer", "Consultant", "Lender", "Regulator", "Admin"])),
+):
     analysis = db.query(ComplianceAnalysis).filter(ComplianceAnalysis.id == analysis_id).first()
     if not analysis:
         return error_response("NOT_FOUND", "Analysis not found.", 404)
@@ -387,13 +455,7 @@ def get_analysis(analysis_id: str, db: Session = Depends(get_db)):
     return {
         "status": "success",
         "analysis_id": str(analysis.id),
-        "document": {
-            "id": str(document.id),
-            "filename": document.filename,
-            "pages": document.pages,
-            "text_length": document.text_length,
-            "contains_nepali": document.contains_nepali,
-        },
+        "document": document_to_response(document),
         "scores": {
             "ps1": analysis.ps1_score,
             "ps2": analysis.ps2_score,
@@ -453,6 +515,23 @@ def stored_finding_to_response(finding):
         "risks": json.loads(finding.risks_json),
         "recommended_actions": json.loads(finding.recommended_actions_json),
         "evidence": json.loads(finding.evidence_json),
+    }
+
+
+def document_to_response(document: Document):
+    uploaded_at = getattr(document, "uploaded_at", None) or document.created_at
+    return {
+        "id": str(document.id),
+        "filename": document.filename,
+        "original_filename": getattr(document, "original_filename", None) or document.filename,
+        "file_size": getattr(document, "file_size", None),
+        "mime_type": getattr(document, "mime_type", None),
+        "sha256_hash": getattr(document, "sha256_hash", None),
+        "uploaded_at": uploaded_at.isoformat() if uploaded_at else None,
+        "verification_status": getattr(document, "verification_status", None) or "uploaded",
+        "pages": document.pages,
+        "text_length": document.text_length,
+        "contains_nepali": document.contains_nepali,
     }
 
 

@@ -207,6 +207,18 @@ def add_manual_verification_note(
         task.status = "completed"
     elif payload.decision in {"unresolved", "needs_field_visit"}:
         task.status = "unresolved"
+    controversy = db.query(ControversyFlag).filter(ControversyFlag.id == task.controversy_id).first()
+    if controversy and controversy.report_claim_id:
+        from database.models import ReportClaim
+
+        claim = db.query(ReportClaim).filter(ReportClaim.id == controversy.report_claim_id).first()
+        if claim:
+            if payload.decision == "report_claim_verified":
+                claim.verification_status = "manually_verified"
+            elif payload.decision in {"false_report_suspected", "community_feedback_verified", "worker_feedback_verified"}:
+                claim.verification_status = "disputed"
+            elif payload.decision in {"unresolved", "needs_field_visit", "partially_verified"}:
+                claim.verification_status = "manual_verification_required"
     db.add(AuditLog(
         project_id=task.project_id,
         actor=payload.verifier_name,

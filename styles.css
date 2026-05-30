@@ -3944,3 +3944,42 @@ body[data-view="dashboard"] .topbar {
     align-items: flex-start;
   }
 }
+
+@media print {
+  body {
+    background: #ffffff;
+  }
+
+  .sidebar,
+  .topbar,
+  .public-home,
+  .role-selection-page,
+  .community-portal-page,
+  .lender-print-actions,
+  .nav-cta,
+  .btn {
+    display: none !important;
+  }
+
+  .app-shell,
+  .workspace,
+  .view.active,
+  #trust-report {
+    display: block !important;
+    min-height: auto;
+    width: 100%;
+    margin: 0;
+    padding: 0;
+  }
+
+  .view:not(#trust-report) {
+    display: none !important;
+  }
+
+  .panel,
+  .lender-memo,
+  .metric-card {
+    box-shadow: none !important;
+    break-inside: avoid;
+  }
+}

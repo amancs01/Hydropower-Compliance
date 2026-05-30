@@ -156,7 +156,7 @@ def detect_controversies(db: Session, project_id: str, responses_with_questions)
             topic,
             default_report_claim(topic),
         )
-        claim.verification_status = "manual_verification_required"
+        claim.verification_status = "contradicted_by_feedback"
 
         existing = (
             db.query(ControversyFlag)

@@ -13,7 +13,11 @@ router = APIRouter(prefix="/api/projects", tags=["evidence"])
 
 
 @router.get("/{project_id}/evidence")
-def get_project_evidence(project_id: str, db: Session = Depends(get_db)):
+def get_project_evidence(
+    project_id: str,
+    db: Session = Depends(get_db),
+    user=Depends(require_roles(["Developer", "Consultant", "Lender", "Regulator", "Admin"])),
+):
     rows = db.query(EvidenceItem).filter(EvidenceItem.project_id == project_id).all()
     return [row_to_dict(row) for row in rows]
 

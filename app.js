@@ -374,7 +374,7 @@ function saveState() {
   localStorage.setItem("hydrocomply-state", JSON.stringify(state));
 }
 
-const API_BASE_URL = "http://127.0.0.1:8000";
+const API_BASE_URL = window.HYDROCOMPLY_API_BASE_URL || localStorage.getItem("hydrocomply-api-base-url") || "http://127.0.0.1:8000";
 
 function backendRole(role = state.role) {
   return {
@@ -418,6 +418,7 @@ async function ensureDemoLogin(role = state.role) {
 }
 
 async function apiGet(path) {
+  await ensureDemoLogin(state.role);
   const response = await fetch(`${API_BASE_URL}${path}`, { headers: authHeaders() });
   if (response.status === 403) throw new Error("This action is not available for your role.");
   if (!response.ok) throw new Error(`Backend request failed: ${path}`);
@@ -566,6 +567,7 @@ async function loadBackendProjectData() {
     render();
     console.log("Backend projects loaded");
     toast("Backend database connected.");
+    await ensureDemoLogin(state.role);
 
     const details = await Promise.all(projects.map(async (projectItem) => {
       const [findings, evidence, grievances, actions, auditLogs, scoreHistory] = await Promise.all([
@@ -697,7 +699,12 @@ function mapBackendEvidence(item) {
     capturedAt: (item.created_at || "").slice(0, 10),
     confidential: Boolean(item.confidential),
     uploadedBy: item.uploaded_by || "Demo team",
-    verifiedBy: item.verified_by || ""
+    verifiedBy: item.verified_by || "",
+    originalFilename: item.original_filename || item.source || "",
+    fileSize: item.file_size || null,
+    mimeType: item.mime_type || "",
+    sha256Hash: item.sha256_hash || "",
+    uploadedAt: item.uploaded_at || item.created_at || ""
   };
 }
 
@@ -731,7 +738,8 @@ function mapBackendAction(item) {
     description: item.description || "",
     status: normalizeStatus(item.status),
     dueDate: item.due_date || "",
-    completedAt: item.completed_at || ""
+    completedAt: item.completed_at || "",
+    aiCreated: String(item.description || "").toLowerCase().includes("ai-created")
   };
 }
 
@@ -2281,6 +2289,25 @@ function shortDate(value) {
   return value ? new Date(value).toLocaleDateString() : "TBD";
 }
 
+function shortHash(value) {
+  return value ? `${String(value).slice(0, 10)}...` : "Not recorded";
+}
+
+function formatFileSize(value) {
+  const bytes = Number(value);
+  if (!Number.isFinite(bytes) || bytes <= 0) return "Not recorded";
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function verificationSourceForClaim(status) {
+  const normalized = String(status || "document_claim_only").toLowerCase();
+  if (normalized.includes("manual") || normalized.includes("verified")) return "Manual verification";
+  if (normalized.includes("contradicted") || normalized.includes("disputed")) return "Ground feedback";
+  return "Report only";
+}
+
 function revealWords(text) {
   return text
     .split(" ")
@@ -2328,6 +2355,10 @@ function renderAnalyst() {
               <span>Extraction: <strong>${textLength ? "Ready" : "Pending"}</strong></span>
               <span>Nepali: <strong>${document.querySelector("#docText")?.value?.match(/[\u0900-\u097F]/) ? "Yes" : "No"}</strong></span>
             </div>
+          </div>
+          <div class="toolbar">
+            <button class="btn" type="button" data-view-text>View extracted text</button>
+            <button class="btn primary" id="runAnalysisStep1" type="button">Run AI Scan</button>
           </div>
           ${accordion("Paste text manually", `
             <div class="field">
@@ -2402,7 +2433,7 @@ function renderAnalyst() {
             </section>
             <section class="tab-panel claims-panel">
               <p class="muted">Report claims are not verified until checked against ground feedback or manual verification.</p>
-              ${compactTable(["IFC Standard", "Topic", "Claim", "Page", "Status"], scanClaims.map((claim) => `<tr><td>${escapeHtml(claim.standard)}</td><td>${escapeHtml(claim.topic)}</td><td><strong>${escapeHtml(claim.claim_text)}</strong>${accordion("Source excerpt", `<p>${escapeHtml(claim.source_excerpt || "No excerpt available.")}</p>`)}</td><td>${escapeHtml(String(claim.source_page ?? "N/A"))}</td><td>${statusPill(claim.verification_status || "document_claim_only", "blue")}</td></tr>`), "No report claims extracted yet.")}
+              ${compactTable(["IFC Standard", "Topic", "Claim", "Page", "Verification source", "Status"], scanClaims.map((claim) => `<tr><td>${escapeHtml(claim.standard)}</td><td>${escapeHtml(claim.topic)}</td><td><strong>${escapeHtml(claim.claim_text)}</strong>${accordion("Source excerpt", `<p>${escapeHtml(claim.source_excerpt || "No excerpt available.")}</p>`)}</td><td>${escapeHtml(String(claim.source_page ?? "N/A"))}</td><td>${escapeHtml(verificationSourceForClaim(claim.verification_status))}</td><td>${statusPill(claim.verification_status || "document_claim_only", "blue")}</td></tr>`), "No report claims extracted yet.")}
             </section>
             <section class="tab-panel findings-panel">
               <div class="analysis-output">${findings.map(renderComplianceFindingFromState).join("") || empty("No findings yet.")}</div>
@@ -2427,6 +2458,12 @@ function renderAnalyst() {
     toast("Sample Middle Tamor EIA text loaded.");
   });
   document.querySelector("#runAnalysis").addEventListener("click", runDocumentAnalysis);
+  document.querySelector("#runAnalysisStep1")?.addEventListener("click", runDocumentAnalysis);
+  document.querySelector("[data-view-text]")?.addEventListener("click", () => {
+    [...document.querySelectorAll(".ui-accordion")]
+      .find((item) => item.querySelector("summary")?.textContent === "View extracted text")
+      ?.setAttribute("open", "");
+  });
   document.querySelector("#runRealAiAnalysis").addEventListener("click", runRealAiAnalysis);
   document.querySelector("#resetDemo").addEventListener("click", () => {
     state = structuredClone(initialState);
@@ -2509,12 +2546,14 @@ function renderAnalyst() {
 
 async function extractPdfTextFromBackend(file) {
   await ensureDemoLogin(state.role);
+  if (!state.selectedProjectId) throw new Error("Select a project before running analysis.");
   const formData = new FormData();
   formData.append("file", file);
+  formData.append("project_id", state.selectedProjectId);
 
   let response;
   try {
-    response = await fetch("http://127.0.0.1:8000/api/pdf/extract", {
+    response = await fetch(`${API_BASE_URL}/api/pdf/extract`, {
       method: "POST",
       body: formData,
       headers: authHeaders()
@@ -2576,12 +2615,14 @@ function messageForPdfUploadError(error, file, isPdf) {
 
 async function analyzeCompliancePdf(file) {
   await ensureDemoLogin(state.role);
+  if (!state.selectedProjectId) throw new Error("Select a project before running analysis.");
   const formData = new FormData();
   formData.append("file", file);
+  formData.append("project_id", state.selectedProjectId);
 
   let response;
   try {
-    response = await fetch("http://127.0.0.1:8000/api/compliance/analyze", {
+    response = await fetch(`${API_BASE_URL}/api/compliance/analyze`, {
       method: "POST",
       body: formData,
       headers: authHeaders()
@@ -2817,6 +2858,7 @@ function renderComplianceAnalysisResult(result, isLocalFallback = false) {
             <span class="tag">Nepali detected: ${result.document.contains_nepali ? "Yes" : "No"}</span>
             <span class="tag">Model: ${escapeHtml(result.raw_model_used.compliance_model)}</span>
             <span class="tag">${escapeHtml(result.scores.coverage_note || `${result.scores.analyzed_count || 0} of ${result.scores.total_standards || 8} standards analyzed`)}</span>
+            <span class="tag">Actions created: ${escapeHtml(String(result.actions_created ?? 0))}</span>
           </div>
         </div>
         <div class="compliance-score-card">
@@ -2839,12 +2881,13 @@ function renderComplianceAnalysisResult(result, isLocalFallback = false) {
             <p>These claims are extracted from the report. They are not verified until checked against ground feedback or manual verification.</p>
           </div>
         </div>
-        ${compactTable(["IFC Standard", "Topic", "Claim", "Page", "Status"], reportClaims.map((claim) => `
+        ${compactTable(["IFC Standard", "Topic", "Claim", "Page", "Verification source", "Status"], reportClaims.map((claim) => `
           <tr>
             <td>${escapeHtml(claim.standard)}</td>
             <td>${escapeHtml(claim.topic)}</td>
             <td><strong>${escapeHtml(claim.claim_text)}</strong>${accordion("Source excerpt", `<p>${escapeHtml(claim.source_excerpt || "No excerpt returned.")}</p>`)}</td>
             <td>${escapeHtml(String(claim.source_page ?? "N/A"))}</td>
+            <td>${escapeHtml(verificationSourceForClaim(claim.verification_status))}</td>
             <td>${statusPill(claim.verification_status || "document_claim_only", "blue")}</td>
           </tr>
         `), "No checkable report claims were extracted.")}
@@ -3130,6 +3173,7 @@ function renderEvidence() {
         <td><strong>${escapeHtml(item.evidenceType)}</strong>${accordion("Snippet", `<p>${escapeHtml(item.summary)}</p>`)}</td>
         <td>${escapeHtml(item.linkedStandard)}</td>
         <td>${escapeHtml(item.source)}</td>
+        <td><span title="${escapeHtml(item.sha256Hash || "No hash recorded")}">${escapeHtml(shortHash(item.sha256Hash))}</span><br><small>${escapeHtml(formatFileSize(item.fileSize))}</small></td>
         <td><span class="status-pill status-${statusClassForEvidence(item.status)}">${escapeHtml(item.status)}</span></td>
         <td>${escapeHtml(item.uploadedBy)}</td>
         <td>${escapeHtml(item.verifiedBy || "Not verified")}</td>
@@ -3152,8 +3196,8 @@ function renderEvidence() {
         <div class="panel">
           <div class="table-wrap">
             <table class="table evidence-table">
-              <thead><tr><th>Evidence</th><th>IFC Standard</th><th>Source</th><th>Status</th><th>Uploaded by</th><th>Verified by</th><th>Date</th><th>Confidentiality</th><th>Action</th></tr></thead>
-              <tbody>${tableRows || `<tr><td colspan="9">${empty("No evidence records yet.")}</td></tr>`}</tbody>
+              <thead><tr><th>Evidence</th><th>IFC Standard</th><th>Source</th><th>File hash</th><th>Status</th><th>Uploaded by</th><th>Verified by</th><th>Date</th><th>Confidentiality</th><th>Action</th></tr></thead>
+              <tbody>${tableRows || `<tr><td colspan="10">${empty("No evidence records yet.")}</td></tr>`}</tbody>
             </table>
           </div>
         </div>
@@ -3609,6 +3653,13 @@ function renderLenderTrustReport() {
   const trustScore = report?.final_trust_score ?? 56;
   const risk = report?.final_risk_level ?? "High";
   const controversies = currentProjectVerification(state.controversies);
+  const reportClaims = currentProjectVerification(state.reportClaims);
+  const contestedClaims = reportClaims.filter((claim) => {
+    const status = String(claim.verification_status || "").toLowerCase();
+    return status.includes("contradicted") || status.includes("disputed") || status.includes("manual");
+  });
+  const verifiedClaims = reportClaims.filter((claim) => String(claim.verification_status || "").toLowerCase().includes("verified"));
+  const manualPending = currentProjectVerification(state.manualTasks).filter((item) => ["open", "unresolved"].includes(String(item.status || "open").toLowerCase()));
   const blockers = projectItems("findings").filter((item) => ["Critical", "High"].includes(item.severity) && item.status !== "Closed").slice(0, 3);
   node.innerHTML = `
     ${projectRoomHeader("trust-report")}
@@ -3627,6 +3678,7 @@ function renderLenderTrustReport() {
         <strong>Manual verification required</strong>
       </div>
     </section>
+    <div class="toolbar lender-print-actions"><button class="btn primary" type="button" data-print-report>Print / Save PDF</button></div>
     <section class="metric-grid four compact-metrics">
       ${metricCard("Document score", readinessText(metrics.readiness))}
       ${metricCard("Community validation", report?.community_validation_score ?? "Pending")}
@@ -3634,21 +3686,23 @@ function renderLenderTrustReport() {
       ${metricCard("Manual verification", report?.manual_verification_score ?? "Pending")}
     </section>
     <section class="panel">
-      <div class="panel-header compact"><div><h3>Top unresolved controversies</h3><p>Showing top 3 only.</p></div><button class="btn" type="button" data-tab-view="controversies">View all</button></div>
-      ${compactTable(["Standard", "Issue", "Severity", "Status"], blockers.map((item) => `<tr><td>${escapeHtml(item.standard)}</td><td>${escapeHtml(item.title)}</td><td>${statusPill(item.severity, severityClass(item.severity))}</td><td>${escapeHtml(item.status)}</td></tr>`), "No unresolved blockers.")}
+      <div class="panel-header compact"><div><h3>Contested claims requiring verification</h3><p>Report claims stay untrusted until field feedback or manual review resolves them.</p></div><button class="btn" type="button" data-tab-view="controversies">View all</button></div>
+      ${compactTable(["Standard", "Report claim", "Verification signal", "Status"], (contestedClaims.length ? contestedClaims : reportClaims.slice(0, 3)).map((claim) => `<tr><td>${escapeHtml(claim.standard || "IFC")}</td><td>${escapeHtml(claim.claim_text || "Claim pending extraction")}</td><td>${escapeHtml(verificationSourceForClaim(claim.verification_status))}</td><td>${statusPill(claim.verification_status || "document_claim_only", claim.verification_status === "contradicted_by_feedback" ? "amber" : "blue")}</td></tr>`), "No extracted report claims yet.")}
+      ${blockers.length ? accordion("Related high-risk findings", compactTable(["Standard", "Issue", "Severity", "Status"], blockers.map((item) => `<tr><td>${escapeHtml(item.standard)}</td><td>${escapeHtml(item.title)}</td><td>${statusPill(item.severity, severityClass(item.severity))}</td><td>${escapeHtml(item.status)}</td></tr>`), "No unresolved blockers.")) : ""}
     </section>
     <section class="panel">
       <div class="metric-grid four compact-metrics">
-        ${metricCard("Claims extracted", projectItems("evidence").length)}
+        ${metricCard("Claims extracted", reportClaims.length)}
+        ${metricCard("Claims verified", verifiedClaims.length)}
         ${metricCard("Feedback received", projectItems("grievances").length + state.validationSubmissions.length)}
-        ${metricCard("Controversies open", controversies.length || blockers.length)}
-        ${metricCard("Manual checks completed", currentProjectVerification(state.manualTasks).filter((item) => item.status === "completed").length)}
+        ${metricCard("Manual checks pending", manualPending.length || controversies.length || blockers.length)}
       </div>
       ${accordion("Why this score?", `<p>${escapeHtml(report?.summary || "Some IFC standards remain unverified or insufficiently evidenced.")}</p>`)}
     </section>
     <div class="toolbar"><button class="btn" type="button" data-refresh-verification>Refresh</button></div>
   `;
   node.querySelector("[data-refresh-verification]")?.addEventListener("click", () => loadVerificationData());
+  node.querySelector("[data-print-report]")?.addEventListener("click", () => window.print());
   bindProjectRoomControls();
 }
 
@@ -3663,6 +3717,10 @@ function renderActions() {
         <span class="status-pill status-${item.status === "Overdue" ? "red" : item.status === "Verified" || item.status === "Closed" ? "green" : "amber"}">${escapeHtml(item.status)}</span>
       </div>
       <p class="muted" style="margin-top:14px">${escapeHtml(item.description)}</p>
+      <div class="split-meta">
+        ${item.aiCreated ? `<span class="tag">AI-created</span>` : ""}
+        ${item.findingId ? `<span class="tag">Linked finding</span>` : ""}
+      </div>
       <div class="toolbar" style="margin-top:18px">
         <button class="btn" data-action-status="${item.id}:In progress" type="button">Start</button>
         <button class="btn" data-action-status="${item.id}:Submitted for review" type="button">Submit evidence</button>

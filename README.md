@@ -126,7 +126,7 @@ http://127.0.0.1:8000/docs
 
 **Backend starts but AI analysis gives an error** — Your `GROQ_API_KEY` may be missing or wrong. Check your `.env` file. The app will fall back to demo analysis automatically.
 
-**Port 8000 already in use** — Another program is using that port. Either close it, or change `--port 8000` to `--port 8001` in Step 8 (and update `API_BASE_URL` in `app.js` to match).
+**Port 8000 already in use** — Another program is using that port. Either close it, or change `--port 8000` to `--port 8001` in Step 8 and set `window.HYDROCOMPLY_API_BASE_URL` or localStorage key `hydrocomply-api-base-url` to match.
 
 ---
 
@@ -147,9 +147,22 @@ GROQ_API_KEY=
 DEMO_JWT_SECRET=change-this-in-production
 ALLOW_ALL_ORIGINS=false
 ALLOWED_ORIGINS=http://localhost:5173,http://127.0.0.1:5173,http://localhost:3000,http://127.0.0.1:3000,http://localhost:4173,http://127.0.0.1:4173
+VITE_API_BASE_URL=http://127.0.0.1:8000
 ```
 
 To use a deployed frontend later, add its URL to `ALLOWED_ORIGINS`, separated by commas. Only use `ALLOW_ALL_ORIGINS=true` for local/demo testing.
+
+The static frontend uses `http://127.0.0.1:8000` by default. To point it at another backend without editing source, set:
+
+```js
+window.HYDROCOMPLY_API_BASE_URL = "http://127.0.0.1:8001";
+```
+
+or run this once in the browser console:
+
+```js
+localStorage.setItem("hydrocomply-api-base-url", "http://127.0.0.1:8001");
+```
 
 HydroComply uses simple demo authentication for role-based API access. This is not production-grade identity management.
 

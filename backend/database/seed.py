@@ -342,6 +342,31 @@ def ensure_seed_schema():
             if "analysis_id" not in report_claim_columns:
                 connection.execute(text("ALTER TABLE report_claims ADD COLUMN analysis_id VARCHAR(80)"))
 
+        if "documents" in inspector.get_table_names():
+            document_columns = {column["name"] for column in inspector.get_columns("documents")}
+            for column_name, column_type in {
+                "original_filename": "VARCHAR(255)",
+                "file_size": "INTEGER",
+                "mime_type": "VARCHAR(255)",
+                "sha256_hash": "VARCHAR(64)",
+                "uploaded_at": "DATETIME",
+                "verification_status": "VARCHAR(100)",
+            }.items():
+                if column_name not in document_columns:
+                    connection.execute(text(f"ALTER TABLE documents ADD COLUMN {column_name} {column_type}"))
+
+        if "evidence_items" in inspector.get_table_names():
+            evidence_columns = {column["name"] for column in inspector.get_columns("evidence_items")}
+            for column_name, column_type in {
+                "original_filename": "VARCHAR(255)",
+                "file_size": "INTEGER",
+                "mime_type": "VARCHAR(255)",
+                "sha256_hash": "VARCHAR(64)",
+                "uploaded_at": "DATETIME",
+            }.items():
+                if column_name not in evidence_columns:
+                    connection.execute(text(f"ALTER TABLE evidence_items ADD COLUMN {column_name} {column_type}"))
+
         snapshot_columns = inspector.get_columns("score_snapshots")
         needs_snapshot_rebuild = any(
             column["name"] in {"ps1_score", "ps5_score", "ps7_score", "overall_score", "risk_level"}

@@ -22,12 +22,14 @@ class EvidenceSnippet(BaseModel):
 
 
 class ReportClaimOutput(BaseModel):
+    id: Optional[str] = None
     standard: str
     topic: str
     claim_text: str
     source_excerpt: str = ""
     source_page: Optional[int] = None
     ai_confidence: int = 0
+    verification_status: str = "document_claim_only"
 
 
 class ModelFinding(BaseModel):
@@ -64,6 +66,12 @@ class ModelComplianceOutput(BaseModel):
 class DocumentInfo(BaseModel):
     id: str
     filename: str
+    original_filename: Optional[str] = None
+    file_size: Optional[int] = None
+    mime_type: Optional[str] = None
+    sha256_hash: Optional[str] = None
+    uploaded_at: Optional[str] = None
+    verification_status: Optional[str] = None
     pages: int
     text_length: int
     contains_nepali: bool
@@ -115,6 +123,7 @@ class ComplianceAnalyzeResponse(BaseModel):
     summary: str
     findings: List[ComplianceFindingResponse]
     report_claims: List[ReportClaimOutput] = []
+    actions_created: int = 0
     raw_model_used: RawModelUsed
 
 

@@ -55,6 +55,10 @@ class EvidenceCreate(BaseModel):
     source: Optional[str] = None
     page_reference: Optional[str] = None
     status: str = "filed"
+    original_filename: Optional[str] = None
+    file_size: Optional[int] = None
+    mime_type: Optional[str] = None
+    sha256_hash: Optional[str] = None
     uploaded_by: str = "Demo team"
     confidential: bool = False
 
