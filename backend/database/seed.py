@@ -1,6 +1,8 @@
 import json
 
-from database.connection import SessionLocal, create_tables
+from sqlalchemy import inspect, text
+
+from database.connection import SessionLocal, create_tables, engine
 from database.models import (
     Action,
     AuditLog,
@@ -12,6 +14,7 @@ from database.models import (
     ProjectBaseline,
     ScoreSnapshot,
     SourceReference,
+    ValidationQuestion,
 )
 
 
@@ -20,12 +23,20 @@ PROJECTS = [
         "id": "khimti",
         "name": "Khimti-I Hydropower",
         "capacity_mw": "60",
+        "normalized_name": "khimti-i-hydropower",
+        "project_type": "hydropower",
         "river": "Khimti Khola",
+        "river_or_basin": "Khimti Khola",
         "district": "Dolakha / Ramechhap",
+        "district_or_region": "Dolakha / Ramechhap",
         "province": "Bagmati",
         "promoter": "Himal Power Limited",
         "status": "Operating",
         "cod": "2000",
+        "report_type_available": "demo baseline",
+        "report_status": "ai_analyzed",
+        "baseline_status": "ai_baseline_created",
+        "metadata_confidence": "demo_public_metadata",
         "description": "Mature operating project profile used for a legacy compliance records demo scenario.",
         "risk_theme": "Legacy compliance records and stale monitoring evidence scenario.",
         "source_note": "Public metadata + demo scenario. Compliance gaps are demo assumptions and require human verification.",
@@ -49,12 +60,20 @@ PROJECTS = [
         "id": "middle-tamor",
         "name": "Middle Tamor HPP",
         "capacity_mw": "73",
+        "normalized_name": "middle-tamor-hpp",
+        "project_type": "hydropower",
         "river": "Tamor River",
+        "river_or_basin": "Tamor River",
         "district": "Taplejung",
+        "district_or_region": "Taplejung",
         "province": "Koshi",
         "promoter": "Sanima Middle Tamor Hydropower",
         "status": "Construction / commissioning",
         "cod": "Demo profile",
+        "report_type_available": "demo EIA text",
+        "report_status": "ai_analyzed",
+        "baseline_status": "ai_baseline_created",
+        "metadata_confidence": "demo_public_metadata",
         "description": "Main demo project for AI document analysis, PS1, PS5, and PS7 evidence-gap scenarios.",
         "risk_theme": "PS1 ESMS gap, PS5 replacement-cost / livelihood follow-up gap, and PS7 applicability evidence gap.",
         "source_note": "Public metadata + demo assumptions. Compliance findings require human verification.",
@@ -93,12 +112,20 @@ PROJECTS = [
         "id": "seti-khola",
         "name": "Seti Khola HPP",
         "capacity_mw": "22",
+        "normalized_name": "seti-khola-hpp",
+        "project_type": "hydropower",
         "river": "Seti Khola",
+        "river_or_basin": "Seti Khola",
         "district": "Kaski",
+        "district_or_region": "Kaski",
         "province": "Gandaki",
         "promoter": "Demo developer",
         "status": "Development",
         "cod": "Demo profile",
+        "report_type_available": "demo profile",
+        "report_status": "ai_analyzed",
+        "baseline_status": "ai_baseline_created",
+        "metadata_confidence": "demo_assumption",
         "description": "Demo project for community nuisance, safety, and waste-handling evidence scenarios.",
         "risk_theme": "PS4 community nuisance / safety complaint and PS3 disputed waste handling evidence.",
         "source_note": "Demo scenario and manual entry. Compliance findings require human verification.",
@@ -134,18 +161,216 @@ PROJECTS = [
 ]
 
 
-def seed_database():
+REPORT_BACKED_PROJECTS = [
+    ("upper-trishuli-1", "Upper Trishuli-1 Hydropower Project", "Trishuli River / basin"),
+    ("kabeli-a", "Kabeli-A Hydroelectric Project", "Kabeli River / basin"),
+    ("nagmati-dam", "Nagmati Dam Project", "Nagmati River / basin"),
+    ("tanahu-tallo-seti", "Tanahu Tallo Seti Hydropower Project", "Seti River / basin"),
+    ("bheri-1-pror", "Bheri-1 PRoR Hydropower Project", "Bheri River / basin"),
+    ("mardi-khola", "Mardi Khola Hydropower Project", "Mardi Khola / basin"),
+    ("mugu-karnali", "Mugu Karnali Hydropower Project", "Karnali River / basin"),
+    ("rasuwagadhi", "Rasuwagadhi Hydropower Project", "to_be_extracted"),
+    ("rolwaling-khola", "Rolwaling Khola Hydropower Project", "Rolwaling Khola / basin"),
+    ("upper-apsuwa-khola", "Upper Apsuwa Khola Hydropower Project", "Apsuwa Khola / basin"),
+    ("upper-inkhu-khola", "Upper Inkhu Khola Hydropower Project", "Inkhu Khola / basin"),
+    ("upper-mugu-karnali", "Upper Mugu Karnali Hydropower Project", "Karnali River / basin"),
+    ("super-inkhu-khola", "Super Inkhu Khola Hydropower Project", "Inkhu Khola / basin"),
+    ("dudhkoshi-5", "Dudhkoshi-5 Hydropower Project", "Dudhkoshi River / basin"),
+    ("bharbung", "Bharbung Hydropower Project", "to_be_extracted"),
+    ("karuwa-seti", "Karuwa Seti Hydropower Project", "Seti River / basin"),
+    ("lower-likhu", "Lower Likhu Hydropower Project", "Likhu River / basin"),
+]
+
+
+PROJECT_FIELDS = [
+    "id", "name", "normalized_name", "project_type", "capacity_mw",
+    "river", "river_or_basin", "district", "district_or_region", "province",
+    "promoter", "status", "cod", "report_type_available", "report_status",
+    "baseline_status", "metadata_confidence", "description", "risk_theme", "source_note",
+]
+
+
+VALIDATION_QUESTIONS = [
+    ("screening", "Screening", "How are you connected to this hydropower project?", "multiple_choice", ["Affected landowner", "Nearby resident", "Indigenous community member", "Downstream water user", "Local business", "Worker", "Contractor worker", "Former worker", "Other"], "PS1", "connection_to_project", "medium"),
+    ("screening", "Screening", "If you selected Other, which topic best matches your concern?", "multiple_choice", ["Community impact", "Working conditions", "Both"], "PS1", "other_connection_followup", "medium"),
+    ("community", "Information and Consultation", "Were you informed before major project activities affected your area?", "multiple_choice", ["Yes", "Partly", "No", "Not sure"], "PS1", "prior_information", "high"),
+    ("community", "Information and Consultation", "Were you or your household invited to consultation meetings?", "multiple_choice", ["Yes", "No", "Not sure"], "PS1", "consultation_invitation", "high"),
+    ("community", "Information and Consultation", "Was information shared in a language and format people could understand?", "multiple_choice", ["Yes", "Partly", "No", "Not sure"], "PS1", "understandable_disclosure", "high"),
+    ("community", "Information and Consultation", "Were women, vulnerable groups, and Indigenous people able to participate meaningfully?", "multiple_choice", ["Yes", "Partly", "No", "Not sure"], "PS1/PS7", "inclusive_consultation", "critical"),
+    ("community", "Information and Consultation", "Did anyone feel pressure to agree with project decisions?", "yes_no_with_followup", ["Yes", "No", "Prefer not to say"], "PS1/PS7", "pressure_or_coercion", "critical"),
+    ("community", "Land and Livelihoods", "Was land compensation fair and clear to affected households?", "multiple_choice", ["Yes", "Partly", "No", "Not sure"], "PS5", "compensation_fairness", "critical"),
+    ("community", "Land and Livelihoods", "Are there unresolved land, crop, house, or livelihood disputes?", "yes_no_with_followup", ["Yes", "No", "Not sure"], "PS5", "unresolved_land_disputes", "critical"),
+    ("community", "Land and Livelihoods", "Were livelihood restoration promises followed after compensation?", "multiple_choice", ["Yes", "Partly", "No", "Not applicable", "Not sure"], "PS5", "livelihood_restoration", "high"),
+    ("community", "Indigenous Peoples and Culture", "Are Indigenous groups affected by land, forest, river, or cultural changes?", "multiple_choice", ["Yes", "No", "Not sure"], "PS7", "indigenous_impact", "critical"),
+    ("community", "Indigenous Peoples and Culture", "Were Indigenous leaders and households consulted separately when needed?", "multiple_choice", ["Yes", "Partly", "No", "Not applicable", "Not sure"], "PS7", "indigenous_consultation", "critical"),
+    ("community", "Indigenous Peoples and Culture", "Are sacred sites, cultural places, or traditional practices affected?", "yes_no_with_followup", ["Yes", "No", "Not sure"], "PS8", "cultural_heritage_impact", "high"),
+    ("community", "Environment and Safety", "Have blasting, road traffic, dust, noise, or construction activities affected safety?", "yes_no_with_followup", ["Yes", "No", "Not sure"], "PS4", "community_safety_impact", "high"),
+    ("community", "Environment and Safety", "Have river flow, fish, drinking water, irrigation, or forest access changed?", "yes_no_with_followup", ["Yes", "No", "Not sure"], "PS3/PS6", "environmental_change", "high"),
+    ("community", "Environment and Safety", "Are mitigation measures visible and working in your area?", "multiple_choice", ["Yes", "Partly", "No", "Not sure"], "PS3/PS4/PS6", "mitigation_working", "medium"),
+    ("community", "Grievance and Trust", "Do people know how to submit a grievance or concern?", "multiple_choice", ["Yes", "Some people know", "No", "Not sure"], "PS1", "grievance_awareness", "medium"),
+    ("community", "Grievance and Trust", "Are people afraid of retaliation if they complain?", "multiple_choice", ["No", "Some people are afraid", "Yes", "Prefer not to say"], "PS1", "fear_of_retaliation", "critical"),
+    ("community", "Grievance and Trust", "Have complaints been acknowledged and resolved on time?", "multiple_choice", ["Yes", "Sometimes delayed", "Often delayed", "No complaints submitted", "Not sure"], "PS1", "grievance_resolution", "high"),
+    ("community", "Grievance and Trust", "Do you believe the project reports describe community impacts honestly?", "multiple_choice", ["Yes", "Partly", "No", "Not sure"], "PS1", "report_trust_concern", "critical"),
+    ("community", "Additional Detail", "What is the most important issue lenders or reviewers should verify?", "text", [], "PS1", "community_priority_issue", "medium"),
+    ("worker", "Employment and Payment", "Are you currently or previously employed on this project?", "multiple_choice", ["Current worker", "Former worker", "Contractor worker", "Not a worker"], "PS2", "worker_connection", "medium"),
+    ("worker", "Employment and Payment", "Do workers receive wages on time?", "multiple_choice", ["Yes", "Sometimes delayed", "Often delayed", "Not paid fully", "Not sure"], "PS2", "timely_payment", "critical"),
+    ("worker", "Employment and Payment", "Are overtime hours recorded and paid fairly?", "multiple_choice", ["Yes", "Partly", "No", "Not applicable", "Not sure"], "PS2", "overtime_fairness", "high"),
+    ("worker", "Employment and Payment", "Do workers receive written contracts or clear terms of work?", "multiple_choice", ["Yes", "Some workers", "No", "Not sure"], "PS2", "contracts_provided", "high"),
+    ("worker", "Worker Safety", "Have workers received safety induction or job-specific safety training?", "multiple_choice", ["Yes", "Only briefly", "No", "Not sure"], "PS2/PS4", "safety_training", "critical"),
+    ("worker", "Worker Safety", "Is proper PPE provided and replaced when needed?", "multiple_choice", ["Yes", "Partly", "No", "Not sure"], "PS2", "ppe_provided", "critical"),
+    ("worker", "Worker Safety", "Are accidents and near-misses honestly recorded and reported?", "multiple_choice", ["Yes", "Partly", "No", "Not sure"], "PS2", "accident_reporting_honesty", "critical"),
+    ("worker", "Worker Safety", "Have you seen unsafe work, tunnel, blasting, electrical, traffic, or camp conditions?", "yes_no_with_followup", ["Yes", "No", "Prefer not to say"], "PS2/PS4", "unsafe_conditions", "critical"),
+    ("worker", "Worker Accommodation", "Are worker camps clean, safe, and supplied with water and sanitation?", "multiple_choice", ["Yes", "Partly", "No", "Not applicable", "Not sure"], "PS2", "worker_camp_conditions", "high"),
+    ("worker", "Worker Accommodation", "Are food, drinking water, and rest facilities adequate?", "multiple_choice", ["Yes", "Partly", "No", "Not sure"], "PS2", "worker_welfare", "medium"),
+    ("worker", "Worker Grievance and Trust", "Do workers know how to raise a workplace grievance?", "multiple_choice", ["Yes", "Some workers know", "No", "Not sure"], "PS2", "worker_grievance_awareness", "medium"),
+    ("worker", "Worker Grievance and Trust", "Are workers afraid of losing work or being punished if they complain?", "multiple_choice", ["No", "Some workers are afraid", "Yes", "Prefer not to say"], "PS2", "worker_retaliation_fear", "critical"),
+    ("worker", "Worker Grievance and Trust", "Do you believe project labor and safety reports describe worker conditions honestly?", "multiple_choice", ["Yes", "Partly", "No", "Not sure"], "PS2", "worker_report_trust_concern", "critical"),
+    ("worker", "Worker Grievance and Trust", "Are there serious worker issues not reflected in official reports?", "yes_no_with_followup", ["Yes", "No", "Not sure"], "PS2", "hidden_worker_issues", "critical"),
+    ("worker", "Additional Detail", "What is the most important worker issue lenders or reviewers should verify?", "text", [], "PS2", "worker_priority_issue", "medium"),
+]
+
+
+def update_project_profile(project: Project, data: dict):
+    for field in PROJECT_FIELDS:
+        if field == "id":
+            continue
+        value = data.get(field)
+        if value is not None:
+            setattr(project, field, value)
+
+
+def report_backed_project(project_id: str, name: str, river_or_basin: str) -> dict:
+    return {
+        "id": project_id,
+        "name": name,
+        "normalized_name": project_id,
+        "project_type": "hydropower",
+        "capacity_mw": None,
+        "river": river_or_basin,
+        "river_or_basin": river_or_basin,
+        "district": "to_be_extracted",
+        "district_or_region": "to_be_extracted",
+        "province": "to_be_extracted",
+        "promoter": "to_be_extracted",
+        "status": "Report-backed project profile",
+        "cod": None,
+        "report_type_available": "report available",
+        "report_status": "report_available",
+        "baseline_status": "baseline_pending",
+        "metadata_confidence": "report_backed_metadata_only",
+        "description": "Report-backed project profile. Baseline analysis is pending PDF upload and extraction.",
+        "risk_theme": "Baseline pending. No compliance findings or scores have been generated.",
+        "source_note": "Seeded from report-backed project list. Compliance baseline pending PDF analysis.",
+    }
+
+
+def seed_validation_questions(db):
+    for question_set, section, question_text, answer_type, options, linked_standard, topic, risk_weight in VALIDATION_QUESTIONS:
+        existing = (
+            db.query(ValidationQuestion)
+            .filter(
+                ValidationQuestion.question_set == question_set,
+                ValidationQuestion.topic == topic,
+                ValidationQuestion.question_text == question_text,
+            )
+            .first()
+        )
+        if existing:
+            existing.section = section
+            existing.answer_type = answer_type
+            existing.options_json = json.dumps(options)
+            existing.linked_standard = linked_standard
+            existing.risk_weight = risk_weight
+            existing.active = True
+            continue
+
+        db.add(ValidationQuestion(
+            question_set=question_set,
+            section=section,
+            question_text=question_text,
+            answer_type=answer_type,
+            options_json=json.dumps(options),
+            linked_standard=linked_standard,
+            topic=topic,
+            risk_weight=risk_weight,
+            active=True,
+        ))
+
+
+def ensure_seed_schema():
+    """Small SQLite upgrade helper for existing local demo databases."""
     create_tables()
+    if engine.dialect.name != "sqlite":
+        return
+
+    project_columns = {
+        "normalized_name": "VARCHAR(255)",
+        "project_type": "VARCHAR(100)",
+        "river_or_basin": "VARCHAR(255)",
+        "district_or_region": "VARCHAR(255)",
+        "report_type_available": "VARCHAR(100)",
+        "report_status": "VARCHAR(100)",
+        "baseline_status": "VARCHAR(100)",
+        "metadata_confidence": "VARCHAR(100)",
+    }
+
+    with engine.begin() as connection:
+        inspector = inspect(connection)
+        existing_project_columns = {column["name"] for column in inspector.get_columns("projects")}
+        for column_name, column_type in project_columns.items():
+            if column_name not in existing_project_columns:
+                connection.execute(text(f"ALTER TABLE projects ADD COLUMN {column_name} {column_type}"))
+
+        snapshot_columns = inspector.get_columns("score_snapshots")
+        needs_snapshot_rebuild = any(
+            column["name"] in {"ps1_score", "ps5_score", "ps7_score", "overall_score", "risk_level"}
+            and not column.get("nullable", True)
+            for column in snapshot_columns
+        )
+        if needs_snapshot_rebuild:
+            connection.execute(text("""
+                CREATE TABLE score_snapshots_new (
+                    id VARCHAR(80) NOT NULL PRIMARY KEY,
+                    project_id VARCHAR(80) NOT NULL,
+                    analysis_id VARCHAR(80),
+                    ps1_score INTEGER,
+                    ps5_score INTEGER,
+                    ps7_score INTEGER,
+                    overall_score INTEGER,
+                    risk_level VARCHAR(50),
+                    reason_for_change TEXT NOT NULL,
+                    created_at DATETIME,
+                    FOREIGN KEY(project_id) REFERENCES projects (id),
+                    FOREIGN KEY(analysis_id) REFERENCES compliance_analyses (id)
+                )
+            """))
+            connection.execute(text("""
+                INSERT INTO score_snapshots_new (
+                    id, project_id, analysis_id, ps1_score, ps5_score, ps7_score,
+                    overall_score, risk_level, reason_for_change, created_at
+                )
+                SELECT
+                    id, project_id, analysis_id, ps1_score, ps5_score, ps7_score,
+                    overall_score, risk_level, reason_for_change, created_at
+                FROM score_snapshots
+            """))
+            connection.execute(text("DROP TABLE score_snapshots"))
+            connection.execute(text("ALTER TABLE score_snapshots_new RENAME TO score_snapshots"))
+
+
+def seed_database():
+    ensure_seed_schema()
     db = SessionLocal()
     try:
+        seed_validation_questions(db)
+
         for data in PROJECTS:
-            if db.query(Project).filter(Project.id == data["id"]).first():
+            existing_project = db.query(Project).filter(Project.id == data["id"]).first()
+            if existing_project:
+                update_project_profile(existing_project, data)
                 continue
 
-            project = Project(**{key: data[key] for key in [
-                "id", "name", "capacity_mw", "river", "district", "province",
-                "promoter", "status", "cod", "description", "risk_theme", "source_note",
-            ]})
+            project = Project(**{key: data.get(key) for key in PROJECT_FIELDS})
             db.add(project)
             db.flush()
 
@@ -248,6 +473,54 @@ def seed_database():
                 entity_type="project",
                 entity_id=project.id,
                 detail="Seeded public metadata + demo assumptions. Requires human verification.",
+            ))
+
+        for project_id, name, river_or_basin in REPORT_BACKED_PROJECTS:
+            data = report_backed_project(project_id, name, river_or_basin)
+            existing_project = db.query(Project).filter(Project.id == project_id).first()
+            if existing_project:
+                update_project_profile(existing_project, data)
+                continue
+
+            project = Project(**{key: data.get(key) for key in PROJECT_FIELDS})
+            db.add(project)
+            db.flush()
+
+            baseline = ProjectBaseline(
+                project_id=project.id,
+                baseline_type="baseline_pending",
+                summary="Report available. Baseline analysis should be generated after PDF upload.",
+                source_quality="report-backed project list; PDF extraction pending",
+                assumption_level="to_be_generated_from_report",
+            )
+            db.add(baseline)
+
+            db.add(SourceReference(
+                project_id=project.id,
+                source_title=f"{project.name} report-backed seed entry",
+                source_type="report_available",
+                note="Project seeded from report-backed list. No findings were generated until a PDF is uploaded and analyzed.",
+            ))
+
+            db.add(ScoreSnapshot(
+                project_id=project.id,
+                analysis_id=None,
+                ps1_score=None,
+                ps5_score=None,
+                ps7_score=None,
+                overall_score=None,
+                risk_level="baseline_pending",
+                reason_for_change="Project seeded from report-backed list; baseline pending PDF analysis.",
+            ))
+
+            db.add(AuditLog(
+                project_id=project.id,
+                actor="HydroComply seed script",
+                actor_role="System",
+                action="Project seeded from report-backed list; baseline pending PDF analysis.",
+                entity_type="project",
+                entity_id=project.id,
+                detail="No compliance score, finding, evidence, grievance, or action was created for this project.",
             ))
 
         db.commit()

@@ -1,17 +1,25 @@
-from typing import Optional
+from typing import List, Optional
 
 from pydantic import BaseModel
 
 
 class ProjectCreate(BaseModel):
     name: str
+    normalized_name: Optional[str] = None
+    project_type: Optional[str] = None
     capacity_mw: Optional[str] = None
     river: Optional[str] = None
+    river_or_basin: Optional[str] = None
     district: Optional[str] = None
+    district_or_region: Optional[str] = None
     province: Optional[str] = None
     promoter: Optional[str] = None
     status: Optional[str] = None
     cod: Optional[str] = None
+    report_type_available: Optional[str] = None
+    report_status: Optional[str] = None
+    baseline_status: Optional[str] = None
+    metadata_confidence: Optional[str] = None
     description: Optional[str] = None
     risk_theme: Optional[str] = None
     source_note: Optional[str] = "manual_entry"
@@ -87,9 +95,43 @@ class VerificationReviewCreate(BaseModel):
 
 class ScoreSnapshotCreate(BaseModel):
     analysis_id: Optional[str] = None
-    ps1_score: int
-    ps5_score: int
-    ps7_score: int
-    overall_score: int
-    risk_level: str
+    ps1_score: Optional[int] = None
+    ps5_score: Optional[int] = None
+    ps7_score: Optional[int] = None
+    overall_score: Optional[int] = None
+    risk_level: Optional[str] = None
     reason_for_change: str
+
+
+class ValidationAnswerCreate(BaseModel):
+    question_id: str
+    answer: str
+    follow_up_text: Optional[str] = None
+
+
+class ValidationSubmissionCreate(BaseModel):
+    respondent_type: str
+    respondent_connection: str
+    answers: List[ValidationAnswerCreate]
+    anonymous: bool = True
+    gps_allowed: bool = False
+    photo_allowed: bool = False
+    location_text: Optional[str] = None
+
+
+class ManualVerificationTaskCreate(BaseModel):
+    assigned_to: str = "Verification team"
+    verification_method: str
+    contact_target: Optional[str] = None
+    question_to_verify: str
+    required_evidence: str
+    due_date: Optional[str] = None
+
+
+class ManualVerificationNoteCreate(BaseModel):
+    verifier_name: str
+    verifier_role: str
+    call_summary: Optional[str] = None
+    evidence_received: Optional[str] = None
+    decision: str
+    notes: Optional[str] = None

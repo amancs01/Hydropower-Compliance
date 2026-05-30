@@ -18,13 +18,21 @@ class Project(Base):
 
     id = Column(String(80), primary_key=True, default=new_id)
     name = Column(String(255), nullable=False)
+    normalized_name = Column(String(255), nullable=True)
+    project_type = Column(String(100), nullable=True)
     capacity_mw = Column(String(50), nullable=True)
     river = Column(String(255), nullable=True)
+    river_or_basin = Column(String(255), nullable=True)
     district = Column(String(255), nullable=True)
+    district_or_region = Column(String(255), nullable=True)
     province = Column(String(255), nullable=True)
     promoter = Column(String(255), nullable=True)
     status = Column(String(255), nullable=True)
     cod = Column(String(255), nullable=True)
+    report_type_available = Column(String(100), nullable=True)
+    report_status = Column(String(100), nullable=True)
+    baseline_status = Column(String(100), nullable=True)
+    metadata_confidence = Column(String(100), nullable=True)
     description = Column(Text, nullable=True)
     risk_theme = Column(Text, nullable=True)
     source_note = Column(Text, nullable=True)
@@ -212,11 +220,11 @@ class ScoreSnapshot(Base):
     id = Column(String(80), primary_key=True, default=new_id)
     project_id = Column(String(80), ForeignKey("projects.id"), nullable=False)
     analysis_id = Column(String(80), ForeignKey("compliance_analyses.id"), nullable=True)
-    ps1_score = Column(Integer, nullable=False)
-    ps5_score = Column(Integer, nullable=False)
-    ps7_score = Column(Integer, nullable=False)
-    overall_score = Column(Integer, nullable=False)
-    risk_level = Column(String(50), nullable=False)
+    ps1_score = Column(Integer, nullable=True)
+    ps5_score = Column(Integer, nullable=True)
+    ps7_score = Column(Integer, nullable=True)
+    overall_score = Column(Integer, nullable=True)
+    risk_level = Column(String(50), nullable=True)
     reason_for_change = Column(Text, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
 
@@ -266,4 +274,150 @@ class SourceReference(Base):
     source_url = Column(Text, nullable=True)
     source_type = Column(String(100), nullable=False)
     note = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class ReportClaim(Base):
+    """Claim extracted from a legal or project report. Claims are not treated as final truth."""
+
+    __tablename__ = "report_claims"
+
+    id = Column(String(80), primary_key=True, default=new_id)
+    project_id = Column(String(80), ForeignKey("projects.id"), nullable=False)
+    document_id = Column(String(80), ForeignKey("documents.id"), nullable=True)
+    standard = Column(String(20), nullable=False)
+    topic = Column(String(255), nullable=False)
+    claim_text = Column(Text, nullable=False)
+    source_page = Column(String(50), nullable=True)
+    source_excerpt = Column(Text, nullable=True)
+    ai_confidence = Column(Integer, default=70)
+    verification_status = Column(String(100), default="document_claim_only")
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class ValidationQuestion(Base):
+    """Questionnaire question for screening, community validation, or worker validation."""
+
+    __tablename__ = "validation_questions"
+
+    id = Column(String(80), primary_key=True, default=new_id)
+    question_set = Column(String(50), nullable=False)
+    section = Column(String(255), nullable=False)
+    question_text = Column(Text, nullable=False)
+    answer_type = Column(String(100), nullable=False)
+    options_json = Column(Text, nullable=False)
+    linked_standard = Column(String(50), nullable=True)
+    topic = Column(String(255), nullable=False)
+    risk_weight = Column(String(50), nullable=False)
+    active = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class ValidationSubmission(Base):
+    """One completed validation questionnaire submission."""
+
+    __tablename__ = "validation_submissions"
+
+    id = Column(String(80), primary_key=True, default=new_id)
+    project_id = Column(String(80), ForeignKey("projects.id"), nullable=False)
+    respondent_type = Column(String(50), nullable=False)
+    respondent_connection = Column(String(255), nullable=False)
+    reference_number = Column(String(100), nullable=False)
+    anonymous = Column(Boolean, default=True)
+    status = Column(String(100), default="submitted")
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class ValidationResponse(Base):
+    """Answer from a community member or worker."""
+
+    __tablename__ = "validation_responses"
+
+    id = Column(String(80), primary_key=True, default=new_id)
+    project_id = Column(String(80), ForeignKey("projects.id"), nullable=False)
+    submission_id = Column(String(80), ForeignKey("validation_submissions.id"), nullable=True)
+    question_id = Column(String(80), ForeignKey("validation_questions.id"), nullable=False)
+    respondent_type = Column(String(50), nullable=False)
+    respondent_connection = Column(String(255), nullable=False)
+    answer = Column(Text, nullable=False)
+    follow_up_text = Column(Text, nullable=True)
+    anonymous = Column(Boolean, default=True)
+    gps_allowed = Column(Boolean, default=False)
+    photo_allowed = Column(Boolean, default=False)
+    location_text = Column(Text, nullable=True)
+    reference_number = Column(String(100), nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class ControversyFlag(Base):
+    """Possible contradiction between report claims and ground-level feedback."""
+
+    __tablename__ = "controversy_flags"
+
+    id = Column(String(80), primary_key=True, default=new_id)
+    project_id = Column(String(80), ForeignKey("projects.id"), nullable=False)
+    report_claim_id = Column(String(80), ForeignKey("report_claims.id"), nullable=True)
+    standard = Column(String(20), nullable=False)
+    topic = Column(String(255), nullable=False)
+    severity = Column(String(50), nullable=False)
+    report_claim = Column(Text, nullable=False)
+    human_feedback_summary = Column(Text, nullable=False)
+    contradiction_summary = Column(Text, nullable=False)
+    recommended_verification = Column(Text, nullable=False)
+    status = Column(String(100), default="open")
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class ManualVerificationTask(Base):
+    """Third-step manual checking task created from a contested claim."""
+
+    __tablename__ = "manual_verification_tasks"
+
+    id = Column(String(80), primary_key=True, default=new_id)
+    project_id = Column(String(80), ForeignKey("projects.id"), nullable=False)
+    controversy_id = Column(String(80), ForeignKey("controversy_flags.id"), nullable=False)
+    assigned_to = Column(String(255), nullable=False)
+    verification_method = Column(String(100), nullable=False)
+    contact_target = Column(String(255), nullable=True)
+    question_to_verify = Column(Text, nullable=False)
+    required_evidence = Column(Text, nullable=False)
+    status = Column(String(100), default="open")
+    due_date = Column(String(50), nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class ManualVerificationNote(Base):
+    """Result or note from manual verification."""
+
+    __tablename__ = "manual_verification_notes"
+
+    id = Column(String(80), primary_key=True, default=new_id)
+    task_id = Column(String(80), ForeignKey("manual_verification_tasks.id"), nullable=False)
+    verifier_name = Column(String(255), nullable=False)
+    verifier_role = Column(String(255), nullable=False)
+    call_summary = Column(Text, nullable=True)
+    evidence_received = Column(Text, nullable=True)
+    decision = Column(String(100), nullable=False)
+    notes = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class LenderTrustReport(Base):
+    """Final lender-facing trust report after document, feedback, and manual verification layers."""
+
+    __tablename__ = "lender_trust_reports"
+
+    id = Column(String(80), primary_key=True, default=new_id)
+    project_id = Column(String(80), ForeignKey("projects.id"), nullable=False)
+    document_analysis_id = Column(String(80), ForeignKey("compliance_analyses.id"), nullable=True)
+    community_validation_score = Column(Integer, nullable=True)
+    worker_validation_score = Column(Integer, nullable=True)
+    manual_verification_score = Column(Integer, nullable=True)
+    final_trust_score = Column(Integer, nullable=False)
+    final_risk_level = Column(String(50), nullable=False)
+    summary = Column(Text, nullable=False)
+    unresolved_controversies_count = Column(Integer, default=0)
+    funding_recommendation = Column(Text, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)

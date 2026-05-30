@@ -6,9 +6,10 @@ from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 
 from config import settings
-from database.connection import create_tables, get_db
+from database.connection import get_db
 from database.models import ComplianceAnalysis, ComplianceFinding, Document, DocumentChunk, IFCRequirement, Project
-from routes import action_routes, audit_routes, evidence_routes, grievance_routes, project_routes
+from database.seed import ensure_seed_schema
+from routes import action_routes, audit_routes, evidence_routes, grievance_routes, project_routes, validation_routes
 from schemas import ComplianceAnalyzeResponse, PdfExtractResponse
 from services.chunk_service import chunk_pages, chunks_to_context, select_relevant_chunks
 from services.compliance_service import IFC_REQUIREMENTS, analyze_with_groq
@@ -41,11 +42,12 @@ app.include_router(evidence_routes.router)
 app.include_router(grievance_routes.router)
 app.include_router(action_routes.router)
 app.include_router(audit_routes.router)
+app.include_router(validation_routes.router)
 
 
 @app.on_event("startup")
 def startup():
-    create_tables()
+    ensure_seed_schema()
 
 
 def error_response(error_code: str, message: str, status_code: int = 400, details=None):

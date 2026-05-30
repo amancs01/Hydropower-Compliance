@@ -31,6 +31,44 @@ Annex: Grievances. A sample complaint register format is included, but there are
 
 const nepaliGrievance = "हाम्रो जग्गाको मुआब्जा अझै पूरा आएको छैन र कार्यालयमा जाँदा कसैले स्पष्ट जवाफ दिँदैन।";
 
+function pendingDemoProject(id, name, river) {
+  return {
+    id,
+    name,
+    capacity: "",
+    river,
+    district: "To be extracted",
+    promoter: "To be extracted",
+    status: "Report-backed project profile",
+    cod: "",
+    reportTypeAvailable: "Report available",
+    reportStatus: "report_available",
+    baselineStatus: "baseline_pending",
+    metadataConfidence: "report_backed_metadata_only",
+    description: "Report-backed project room. Upload the project report to generate the compliance baseline."
+  };
+}
+
+const reportBackedDemoProjects = [
+  pendingDemoProject("upper-trishuli-1", "Upper Trishuli-1 Hydropower Project", "Trishuli River / basin"),
+  pendingDemoProject("kabeli-a", "Kabeli-A Hydroelectric Project", "Kabeli River / basin"),
+  pendingDemoProject("nagmati-dam", "Nagmati Dam Project", "Nagmati River / basin"),
+  pendingDemoProject("tanahu-tallo-seti", "Tanahu Tallo Seti Hydropower Project", "Seti River / basin"),
+  pendingDemoProject("bheri-1-pror", "Bheri-1 PRoR Hydropower Project", "Bheri River / basin"),
+  pendingDemoProject("mardi-khola", "Mardi Khola Hydropower Project", "Mardi Khola / basin"),
+  pendingDemoProject("mugu-karnali", "Mugu Karnali Hydropower Project", "Karnali River / basin"),
+  pendingDemoProject("rasuwagadhi", "Rasuwagadhi Hydropower Project", "To be extracted"),
+  pendingDemoProject("rolwaling-khola", "Rolwaling Khola Hydropower Project", "Rolwaling Khola / basin"),
+  pendingDemoProject("upper-apsuwa-khola", "Upper Apsuwa Khola Hydropower Project", "Apsuwa Khola / basin"),
+  pendingDemoProject("upper-inkhu-khola", "Upper Inkhu Khola Hydropower Project", "Inkhu Khola / basin"),
+  pendingDemoProject("upper-mugu-karnali", "Upper Mugu Karnali Hydropower Project", "Karnali River / basin"),
+  pendingDemoProject("super-inkhu-khola", "Super Inkhu Khola Hydropower Project", "Inkhu Khola / basin"),
+  pendingDemoProject("dudhkoshi-5", "Dudhkoshi-5 Hydropower Project", "Dudhkoshi River / basin"),
+  pendingDemoProject("bharbung", "Bharbung Hydropower Project", "To be extracted"),
+  pendingDemoProject("karuwa-seti", "Karuwa Seti Hydropower Project", "Seti River / basin"),
+  pendingDemoProject("lower-likhu", "Lower Likhu Hydropower Project", "Likhu River / basin")
+];
+
 const initialState = {
   selectedProjectId: "middle-tamor",
   role: "Lender",
@@ -68,12 +106,14 @@ const initialState = {
       status: "Development",
       cod: "Demo profile",
       description: "Mid-size demo project with community nuisance and waste-handling evidence scenarios."
-    }
+    },
+    ...reportBackedDemoProjects
   ],
   scores: {
     "khimti": { PS1: 58, PS2: 76, PS3: 46, PS4: 64, PS5: 48, PS6: 71, PS7: 67, PS8: 82 },
     "middle-tamor": { PS1: 38, PS2: 70, PS3: 62, PS4: 66, PS5: 42, PS6: 47, PS7: 34, PS8: 76 },
-    "seti-khola": { PS1: 61, PS2: 73, PS3: 49, PS4: 43, PS5: 65, PS6: 68, PS7: 72, PS8: 80 }
+    "seti-khola": { PS1: 61, PS2: 73, PS3: 49, PS4: 43, PS5: 65, PS6: 68, PS7: 72, PS8: 80 },
+    ...Object.fromEntries(reportBackedDemoProjects.map((item) => [item.id, null]))
   },
   evidence: [
     evidence("ev-1", "khimti", "PS3", "Water quality monitoring report", "Expired", "Monitoring record older than current lender freshness window.", "Environmental monitoring folder", "2024-05-11", false),
@@ -105,7 +145,11 @@ const initialState = {
     audit("Action assigned", "Compliance Manager assigned ESMS upload due 2026-06-12.", "Lender Reviewer", "2026-05-28T14:31:00"),
     audit("Grievance received", "Nepali compensation grievance routed to PS5 with confidential handling.", "Community Portal", "2026-05-28T14:20:00"),
     audit("Evidence disputed", "Seti Khola waste checklist marked disputed pending disposal proof.", "Consultant", "2026-05-21T11:45:00")
-  ]
+  ],
+  validationSubmissions: [],
+  controversies: [],
+  manualTasks: [],
+  lenderTrustReports: []
 };
 
 let state = loadState();
@@ -113,6 +157,19 @@ let currentRoute = "publicHome";
 let currentView = "dashboard";
 let selectedAnalyzerFile = null;
 let latestComplianceAnalysis = null;
+let projectFilter = "all";
+let validationFlow = {
+  step: "screening",
+  projectId: state.selectedProjectId,
+  respondentConnection: "",
+  respondentType: "community",
+  questionSet: "community",
+  sectionIndex: 0,
+  questions: [],
+  answers: {},
+  loading: false,
+  receipt: null
+};
 
 const reviewerRoles = new Set(["Lender", "Lender / Investor", "Consultant", "Reviewer", "Regulator / Reviewer"]);
 
@@ -161,8 +218,12 @@ const portalNav = {
     ["analyst", "AI Document Scan", "spark"],
     ["matrix", "Compliance Gaps", "matrix"],
     ["evidence", "Evidence Vault", "vault"],
+    ["validation", "Validation Questionnaires", "message"],
+    ["controversies", "Controversy Center", "alert"],
+    ["manual-verification", "Manual Verification", "check"],
     ["grievances", "Grievances", "message"],
     ["actions", "Actions", "check"],
+    ["trust-report", "Trust Report", "rule"],
     ["reports", "Reports", "rule"],
     ["audit", "Audit Trail", "clock"]
   ],
@@ -170,6 +231,9 @@ const portalNav = {
     ["dashboard", "Portfolio Risk", "layout"],
     ["matrix", "Project Review", "matrix"],
     ["evidence", "Verified Evidence", "vault"],
+    ["trust-report", "Trust Report", "rule"],
+    ["controversies", "Controversy Center", "alert"],
+    ["manual-verification", "Verification Desk", "check"],
     ["analyst", "Critical Gaps", "alert"],
     ["grievances", "Grievance History", "message"],
     ["audit", "Audit Trail", "clock"],
@@ -179,6 +243,9 @@ const portalNav = {
     ["dashboard", "Review Queue", "layout"],
     ["analyst", "AI Findings", "spark"],
     ["evidence", "Evidence Verification", "vault"],
+    ["validation", "Questionnaires", "message"],
+    ["manual-verification", "Manual Verification", "check"],
+    ["controversies", "Controversies", "alert"],
     ["matrix", "Disputed Evidence", "matrix"],
     ["grievances", "Comments", "message"],
     ["reports", "Reports", "rule"]
@@ -187,6 +254,8 @@ const portalNav = {
     ["dashboard", "Projects", "layout"],
     ["matrix", "Submission Completeness", "matrix"],
     ["evidence", "Monitoring Status", "vault"],
+    ["validation", "Validation Responses", "message"],
+    ["controversies", "Controversies", "alert"],
     ["actions", "Commitments", "check"],
     ["grievances", "Grievance Trends", "message"],
     ["audit", "Inspection View", "clock"]
@@ -194,6 +263,9 @@ const portalNav = {
   "community-liaison": [
     ["dashboard", "New Grievances", "layout"],
     ["grievances", "Confidential Cases", "message"],
+    ["validation", "Validation Questionnaires", "message"],
+    ["controversies", "Controversy Center", "alert"],
+    ["manual-verification", "Manual Verification", "check"],
     ["actions", "Response Deadlines", "check"],
     ["audit", "Escalations", "clock"],
     ["evidence", "Resolution Evidence", "vault"]
@@ -223,6 +295,10 @@ const views = {
   matrix: { eyebrow: "IFC PS1-PS8 gap matrix", title: "Explainable scores with evidence confidence" },
   evidence: { eyebrow: "Evidence Vault", title: "Filed is not the same as verified" },
   grievances: { eyebrow: "Community Grievance Center", title: "Plain-language complaints routed to IFC standards" },
+  validation: { eyebrow: "Validation Questionnaires", title: "Community and worker ground-truth validation" },
+  controversies: { eyebrow: "Controversy Center", title: "Document claims compared with ground-level feedback" },
+  "manual-verification": { eyebrow: "Manual Verification Desk", title: "Human checks for contested claims" },
+  "trust-report": { eyebrow: "Lender Trust Report", title: "Document, feedback, and verification confidence" },
   actions: { eyebrow: "Action Tracker", title: "Every gap becomes an accountable promise" },
   rules: { eyebrow: "Transparent rule engine", title: "Scoring logic the reviewer can inspect" },
   audit: { eyebrow: "Accountability trail", title: "Who knew, who acted, and what changed" }
@@ -263,19 +339,44 @@ function audit(actionName, detail, actor, createdAt) {
   return { id: crypto.randomUUID(), entityType: "demo", entityId: "workspace", actor, action: actionName, detail, createdAt };
 }
 
+function mergeProjectsWithDefaults(projects = []) {
+  const savedById = new Map(projects.map((item) => [item.id, item]));
+  const merged = initialState.projects.map((defaultProject) => ({
+    ...defaultProject,
+    ...(savedById.get(defaultProject.id) || {})
+  }));
+  projects.forEach((item) => {
+    if (!initialState.projects.some((defaultProject) => defaultProject.id === item.id)) {
+      merged.push(item);
+    }
+  });
+  return merged;
+}
+
+function mergeScoresWithDefaults(scores = {}) {
+  return { ...initialState.scores, ...scores };
+}
+
 function loadState() {
   const stored = localStorage.getItem("hydrocomply-state");
   if (!stored) return structuredClone(initialState);
   try {
     const parsed = JSON.parse(stored);
     const nextState = { ...structuredClone(initialState), ...parsed };
-    nextState.projects = parsed.projects || initialState.projects;
-    nextState.scores = parsed.scores || initialState.scores;
+    nextState.projects = mergeProjectsWithDefaults(parsed.projects || []);
+    nextState.scores = mergeScoresWithDefaults(parsed.scores || {});
     nextState.evidence = parsed.evidence || initialState.evidence;
     nextState.findings = parsed.findings || initialState.findings;
     nextState.grievances = parsed.grievances || initialState.grievances;
     nextState.actions = parsed.actions || initialState.actions;
     nextState.auditLogs = parsed.auditLogs || initialState.auditLogs;
+    nextState.validationSubmissions = parsed.validationSubmissions || initialState.validationSubmissions;
+    nextState.controversies = parsed.controversies || initialState.controversies;
+    nextState.manualTasks = parsed.manualTasks || initialState.manualTasks;
+    nextState.lenderTrustReports = parsed.lenderTrustReports || initialState.lenderTrustReports;
+    if (!nextState.projects.some((item) => item.id === nextState.selectedProjectId)) {
+      nextState.selectedProjectId = initialState.selectedProjectId;
+    }
     return nextState;
   } catch {
     return structuredClone(initialState);
@@ -294,8 +395,79 @@ async function apiGet(path) {
   return response.json();
 }
 
-function fetchProjects() {
+function fetchProjectsFromBackend() {
+  console.log("Fetching projects from backend...");
   return apiGet("/api/projects");
+}
+
+function fetchScreeningQuestion(projectId) {
+  return apiGet(`/api/projects/${encodeURIComponent(projectId)}/validation/screening-question`);
+}
+
+function fetchValidationQuestions(projectId, questionSet) {
+  return apiGet(`/api/projects/${encodeURIComponent(projectId)}/validation/questions?question_set=${encodeURIComponent(questionSet)}`);
+}
+
+async function submitValidationResponses(projectId, payload) {
+  const response = await fetch(`${API_BASE_URL}/api/projects/${encodeURIComponent(projectId)}/validation/responses`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload)
+  });
+  if (!response.ok) throw new Error("Validation submission failed.");
+  return response.json();
+}
+
+function fetchControversies(projectId) {
+  return apiGet(`/api/projects/${encodeURIComponent(projectId)}/controversies`);
+}
+
+function fetchManualTasks(projectId) {
+  return apiGet(`/api/projects/${encodeURIComponent(projectId)}/manual-verification-tasks`);
+}
+
+function fetchLenderTrustReport(projectId) {
+  return apiGet(`/api/projects/${encodeURIComponent(projectId)}/lender-trust-report`);
+}
+
+async function addManualTaskNote(taskId, payload) {
+  const response = await fetch(`${API_BASE_URL}/api/manual-verification-tasks/${encodeURIComponent(taskId)}/notes`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload)
+  });
+  if (!response.ok) throw new Error("Manual verification note failed.");
+  return response.json();
+}
+
+async function loadVerificationData(projectId = state.selectedProjectId) {
+  try {
+    const [controversies, manualTasks, trustReport] = await Promise.all([
+      fetchControversies(projectId),
+      fetchManualTasks(projectId),
+      fetchLenderTrustReport(projectId)
+    ]);
+    state.controversies = [
+      ...state.controversies.filter((item) => item.project_id !== projectId && item.projectId !== projectId),
+      ...controversies
+    ];
+    state.manualTasks = [
+      ...state.manualTasks.filter((item) => item.project_id !== projectId && item.projectId !== projectId),
+      ...manualTasks
+    ];
+    state.lenderTrustReports = [
+      ...state.lenderTrustReports.filter((item) => item.project_id !== projectId && item.projectId !== projectId),
+      trustReport
+    ];
+    saveState();
+    render();
+  } catch {
+    toast("Backend verification data is not available. Showing local demo data.");
+  }
+}
+
+function fetchProjects() {
+  return fetchProjectsFromBackend();
 }
 
 function fetchProject(projectId) {
@@ -328,31 +500,44 @@ function fetchProjectScoreHistory(projectId) {
 
 async function loadBackendProjectData() {
   try {
-    const projects = await fetchProjects();
-    if (!Array.isArray(projects) || !projects.length) return;
+    const projects = await fetchProjectsFromBackend();
+    if (!Array.isArray(projects) || !projects.length) {
+      throw new Error("No backend projects returned.");
+    }
+
+    state.projects = projects.map(mapBackendProject);
+    state.scores = {};
+    state.findings = [];
+    state.evidence = [];
+    state.grievances = [];
+    state.actions = [];
+    state.auditLogs = [];
+
+    projects.forEach((projectItem) => {
+      state.scores[projectItem.id] = mapBackendScore(projectItem, []);
+    });
+
+    if (!state.projects.some((item) => item.id === state.selectedProjectId)) {
+      state.selectedProjectId = state.projects[0].id;
+    }
+
+    state.dataSource = "Backend database connected";
+    saveState();
+    renderProjectOptions();
+    render();
+    console.log("Backend projects loaded");
+    toast("Backend database connected.");
 
     const details = await Promise.all(projects.map(async (projectItem) => {
       const [findings, evidence, grievances, actions, auditLogs, scoreHistory] = await Promise.all([
-        fetchProjectFindings(projectItem.id),
-        fetchProjectEvidence(projectItem.id),
-        fetchProjectGrievances(projectItem.id),
-        fetchProjectActions(projectItem.id),
-        fetchProjectAudit(projectItem.id),
-        fetchProjectScoreHistory(projectItem.id)
+        optionalBackendList(() => fetchProjectFindings(projectItem.id)),
+        optionalBackendList(() => fetchProjectEvidence(projectItem.id)),
+        optionalBackendList(() => fetchProjectGrievances(projectItem.id)),
+        optionalBackendList(() => fetchProjectActions(projectItem.id)),
+        optionalBackendList(() => fetchProjectAudit(projectItem.id)),
+        optionalBackendList(() => fetchProjectScoreHistory(projectItem.id))
       ]);
       return { projectItem, findings, evidence, grievances, actions, auditLogs, scoreHistory };
-    }));
-
-    state.projects = details.map(({ projectItem }) => ({
-      id: projectItem.id,
-      name: projectItem.name,
-      capacity: projectItem.capacity_mw ? `${projectItem.capacity_mw} MW` : "",
-      river: projectItem.river || "",
-      district: projectItem.district || "",
-      promoter: projectItem.promoter || "",
-      status: projectItem.status || "",
-      cod: projectItem.cod || "",
-      description: projectItem.description || projectItem.source_note || ""
     }));
 
     state.scores = {};
@@ -363,17 +548,7 @@ async function loadBackendProjectData() {
     state.auditLogs = [];
 
     details.forEach(({ projectItem, findings, evidence, grievances, actions, auditLogs, scoreHistory }) => {
-      const latest = projectItem.latest_score || scoreHistory[scoreHistory.length - 1] || {};
-      state.scores[projectItem.id] = {
-        PS1: latest.ps1_score ?? 50,
-        PS2: latest.ps2_score ?? 60,
-        PS3: latest.ps3_score ?? 60,
-        PS4: latest.ps4_score ?? 60,
-        PS5: latest.ps5_score ?? 50,
-        PS6: latest.ps6_score ?? 60,
-        PS7: latest.ps7_score ?? 50,
-        PS8: latest.ps8_score ?? 70
-      };
+      state.scores[projectItem.id] = mapBackendScore(projectItem, scoreHistory);
       state.findings.push(...findings.map(mapBackendFinding));
       state.evidence.push(...evidence.map(mapBackendEvidence));
       state.grievances.push(...grievances.map(mapBackendGrievance));
@@ -381,18 +556,79 @@ async function loadBackendProjectData() {
       state.auditLogs.push(...auditLogs.map(mapBackendAudit));
     });
 
-    if (!state.projects.some((item) => item.id === state.selectedProjectId)) {
-      state.selectedProjectId = state.projects[0].id;
-    }
-    state.dataSource = "Backend database";
+    saveState();
+    render();
+  } catch (error) {
+    console.log("Backend unavailable, using local fallback", error);
+    useLocalDemoFallback();
+  }
+}
+
+function useLocalDemoFallback() {
+  if (state.dataSource === "Backend database connected") {
+    const currentRole = state.role;
+    state = structuredClone(initialState);
+    state.role = currentRole;
+    state.dataSource = "Local demo fallback";
     saveState();
     renderProjectOptions();
     render();
-    toast("Loaded project data from backend database.");
-  } catch {
-    state.dataSource = "Local demo fallback";
-    updateTopbarContext();
+    return;
   }
+
+  state.dataSource = "Local demo fallback";
+  saveState();
+  updateTopbarContext();
+}
+
+async function optionalBackendList(loader) {
+  try {
+    const value = await loader();
+    return Array.isArray(value) ? value : [];
+  } catch (error) {
+    console.warn("Optional backend records unavailable", error);
+    return [];
+  }
+}
+
+function mapBackendProject(projectItem) {
+  return {
+    id: projectItem.id,
+    name: projectItem.name,
+    normalizedName: projectItem.normalized_name || projectItem.id,
+    projectType: projectItem.project_type || "hydropower",
+    capacity: projectItem.capacity_mw ? `${projectItem.capacity_mw} MW` : "",
+    river: projectItem.river_or_basin || projectItem.river || "",
+    district: projectItem.district_or_region || projectItem.district || "",
+    promoter: projectItem.promoter || "",
+    status: projectItem.status || "",
+    cod: projectItem.cod || "",
+    reportTypeAvailable: projectItem.report_type_available || "",
+    reportStatus: projectItem.report_status || "",
+    baselineStatus: projectItem.baseline_status || "",
+    metadataConfidence: projectItem.metadata_confidence || "",
+    description: projectItem.description || projectItem.source_note || ""
+  };
+}
+
+function mapBackendScore(projectItem, scoreHistory = []) {
+  const latest = projectItem.latest_score || scoreHistory[scoreHistory.length - 1] || {};
+  const isPendingScore = projectItem.baseline_status === "baseline_pending"
+    || latest.risk_level === "baseline_pending"
+    || latest.overall_score === null
+    || latest.overall_score === undefined;
+  if (isPendingScore) return null;
+
+  return {
+    PS1: latest.ps1_score ?? 50,
+    PS2: latest.ps2_score ?? 60,
+    PS3: latest.ps3_score ?? 60,
+    PS4: latest.ps4_score ?? 60,
+    PS5: latest.ps5_score ?? 50,
+    PS6: latest.ps6_score ?? 60,
+    PS7: latest.ps7_score ?? 50,
+    PS8: latest.ps8_score ?? 70
+  };
 }
 
 function mapBackendFinding(item) {
@@ -493,13 +729,49 @@ function project() {
 }
 
 function selectedScores() {
-  return state.scores[state.selectedProjectId];
+  return state.scores[state.selectedProjectId] || null;
 }
 
 function statusForScore(score) {
+  if (!Number.isFinite(score)) return "Pending";
   if (score >= 80) return "Green";
   if (score >= 50) return "Amber";
   return "Red";
+}
+
+function hasComplianceScore(projectId = state.selectedProjectId) {
+  const scores = state.scores[projectId];
+  return Boolean(scores) && standards.some((standard) => Number.isFinite(scores[standard.code]));
+}
+
+function isBaselinePendingProject(item = project()) {
+  if (!item) return false;
+  return item.baselineStatus === "baseline_pending" || item.reportStatus === "needs_ocr" || !hasComplianceScore(item.id);
+}
+
+function projectStatusLabel(item = project()) {
+  if (!item) return "Baseline pending";
+  if (item.reportStatus === "needs_ocr") return "Needs OCR";
+  if (item.baselineStatus === "human_verified") return "Human verified";
+  if (item.baselineStatus === "ai_baseline_created" || item.reportStatus === "ai_analyzed") return "AI analyzed";
+  if (hasComplianceScore(item.id)) return "AI analyzed";
+  return "Baseline pending";
+}
+
+function projectStatusClass(item = project()) {
+  const label = projectStatusLabel(item).toLowerCase().replace(/\s+/g, "-");
+  if (label === "ai-analyzed") return "amber";
+  if (label === "human-verified") return "green";
+  if (label === "needs-ocr") return "red";
+  return "pending";
+}
+
+function readinessText(score) {
+  return Number.isFinite(score) ? `${score}/100` : "Baseline pending";
+}
+
+function scoreOrPending(score) {
+  return Number.isFinite(score) ? String(score) : "Pending";
 }
 
 function severityClass(value) {
@@ -520,7 +792,9 @@ function roleKey(role = state.role) {
 }
 
 function average(scores) {
-  const values = Object.values(scores);
+  if (!scores) return null;
+  const values = Object.values(scores).filter((value) => Number.isFinite(value));
+  if (!values.length) return null;
   return Math.round(values.reduce((sum, value) => sum + value, 0) / values.length);
 }
 
@@ -652,6 +926,10 @@ function render() {
   renderMatrix();
   renderEvidence();
   renderGrievances();
+  renderValidationQuestionnaires();
+  renderControversyCenter();
+  renderManualVerificationDesk();
+  renderLenderTrustReport();
   renderActions();
   renderRules();
   renderAudit();
@@ -700,33 +978,70 @@ function renderLandingPage() {
 
     <section id="product" class="public-hero">
       <div class="hero-copy">
-        <p class="eyebrow">Enterprise infrastructure compliance platform</p>
-        <h2>AI compliance intelligence for hydropower projects.</h2>
-        <p>HydroComply Nepal reads EIA, IEE, RAP, ESMP, monitoring reports, and grievances, maps evidence to IFC Performance Standards PS1-PS8, detects financing risks, and turns gaps into accountable actions.</p>
+        <p class="eyebrow">IFC compliance intelligence</p>
+        <h2>AI compliance for hydropower finance.</h2>
+        <p>Upload EIA, IEE, RAP, ESMP, biodiversity, and grievance documents. HydroComply maps evidence to IFC standards, detects risks, and creates accountable actions.</p>
+        <div class="hero-trust-list">
+          <span>PDF evidence extraction</span>
+          <span>IFC PS1, PS5, PS7 gap detection</span>
+          <span>Audit trail for lenders</span>
+        </div>
         <div class="hero-actions">
           <button class="btn primary" type="button" data-route="developer">Run AI Project Scan</button>
-          <button class="btn" type="button" data-route="community">Submit Community Concern</button>
-          <button class="btn" type="button" data-route="lender">View Lender Demo</button>
+          <button class="btn secondary" type="button" data-route="lender">View Lender Demo</button>
+          <button class="btn link" type="button" data-route="community">Submit Community Concern</button>
         </div>
       </div>
-      <div class="product-mockup" aria-label="HydroComply product preview">
-        <div class="mockup-topbar"><span></span><strong>Middle Tamor HPP Project Room</strong><em>Readiness 42/100</em></div>
-        <div class="mockup-grid">
-          <article class="mock-document">
-            <p class="eyebrow">Document</p>
-            <h3>Middle Tamor EIA.pdf</h3>
-            <p>Land acquisition, public hearings, biodiversity baseline, grievance register format...</p>
+      <div class="hero-ai-pipeline" aria-label="AI Compliance Pipeline visual">
+        <span class="pipeline-connector connector-doc-engine"></span>
+        <span class="pipeline-connector connector-engine-findings"></span>
+        <article class="pipeline-card pipeline-document">
+          <div class="pipeline-card-top">
+            <span class="pipeline-icon">PDF</span>
+            <span class="pipeline-status">Extracted</span>
+          </div>
+          <h3>Middle Tamor EIA.pdf</h3>
+          <p>216 pages &bull; Extracted text</p>
+          <div class="pipeline-tags">
+            <span>EIA</span>
+            <span>Land</span>
+            <span>Biodiversity</span>
+            <span>Grievance log</span>
+          </div>
+        </article>
+
+        <article class="pipeline-card pipeline-engine">
+          <div class="engine-orb" aria-hidden="true"></div>
+          <div class="scan-line" aria-hidden="true"></div>
+          <p class="pipeline-eyebrow">AI processing</p>
+          <h3>AI Compliance Engine</h3>
+          <p>Mapping evidence to IFC PS1-PS8</p>
+          <div class="pipeline-steps">
+            <span>Extracting evidence</span>
+            <span>Detecting gaps</span>
+            <span>Checking verification status</span>
+          </div>
+        </article>
+
+        <section class="pipeline-findings" aria-label="IFC risk findings">
+          <article class="finding-chip critical">
+            <span>PS1 Critical</span>
+            <strong>ESMS not found</strong>
           </article>
-          <article class="mock-process">
-            <p class="eyebrow">AI processing</p>
-            ${["Extracting evidence", "Mapping to IFC PS1-PS8", "Detecting missing documents", "Creating actions"].map((item) => `<span>${item}</span>`).join("")}
+          <article class="finding-chip high">
+            <span>PS5 High Risk</span>
+            <strong>Replacement-cost unclear</strong>
           </article>
-          <article class="mock-findings">
-            <p class="eyebrow">Findings</p>
-            <div><strong>PS1 Critical</strong><span>ESMS not found</span></div>
-            <div><strong>PS5 High Risk</strong><span>Replacement cost unclear</span></div>
-            <div><strong>PS7 Critical</strong><span>IPP/FPIC evidence missing</span></div>
+          <article class="finding-chip critical">
+            <span>PS7 Critical</span>
+            <strong>IPP / FPIC evidence missing</strong>
           </article>
+        </section>
+
+        <div class="pipeline-action-strip">
+          <strong>3 actions created</strong>
+          <span>2 evidence items pending verification</span>
+          <em>Risk: High</em>
         </div>
       </div>
     </section>
@@ -791,7 +1106,11 @@ function renderLandingPage() {
     <section class="public-section proof-section">
       <div class="section-heading"><p class="eyebrow">Demo projects</p><h3>Project rooms already loaded for the MVP.</h3></div>
       <div class="project-proof-grid">
-        ${state.projects.map((item) => `<article class="card"><h3>${escapeHtml(item.name)}</h3><p class="muted">${escapeHtml(item.capacity)} - ${escapeHtml(item.district)}</p><span class="status-pill status-${statusForScore(average(state.scores[item.id])).toLowerCase()}">${average(state.scores[item.id])}/100 readiness</span></article>`).join("")}
+        ${state.projects.map((item) => {
+          const score = average(state.scores[item.id]);
+          const status = statusForScore(score);
+          return `<article class="card"><h3>${escapeHtml(item.name)}</h3><p class="muted">${escapeHtml(item.capacity || "Capacity pending")} - ${escapeHtml(item.district || "Region pending")}</p><span class="status-pill status-${status.toLowerCase()}">${Number.isFinite(score) ? `${score}/100 readiness` : "Baseline pending"}</span></article>`;
+        }).join("")}
       </div>
     </section>
 
@@ -850,8 +1169,152 @@ function renderRoleSelection() {
   });
 }
 
+const validationQuestionFallbacks = {
+  community: [
+    { id: "local-c-1", section: "Information and Consultation", question_text: "Were you informed before major project activities affected your area?", answer_type: "multiple_choice", options: ["Yes", "Partly", "No", "Not sure"], linked_standard: "PS1", topic: "prior_information", risk_weight: "high" },
+    { id: "local-c-2", section: "Land and Livelihoods", question_text: "Was land compensation fair and clear to affected households?", answer_type: "multiple_choice", options: ["Yes", "Partly", "No", "Not sure"], linked_standard: "PS5", topic: "compensation_fairness", risk_weight: "critical" },
+    { id: "local-c-3", section: "Land and Livelihoods", question_text: "Are there unresolved land, crop, house, or livelihood disputes?", answer_type: "yes_no_with_followup", options: ["Yes", "No", "Not sure"], linked_standard: "PS5", topic: "unresolved_land_disputes", risk_weight: "critical" },
+    { id: "local-c-4", section: "Grievance and Trust", question_text: "Are people afraid of retaliation if they complain?", answer_type: "multiple_choice", options: ["No", "Some people are afraid", "Yes", "Prefer not to say"], linked_standard: "PS1", topic: "fear_of_retaliation", risk_weight: "critical" },
+    { id: "local-c-5", section: "Grievance and Trust", question_text: "Do you believe the project reports describe community impacts honestly?", answer_type: "multiple_choice", options: ["Yes", "Partly", "No", "Not sure"], linked_standard: "PS1", topic: "report_trust_concern", risk_weight: "critical" }
+  ],
+  worker: [
+    { id: "local-w-1", section: "Employment and Payment", question_text: "Do workers receive wages on time?", answer_type: "multiple_choice", options: ["Yes", "Sometimes delayed", "Often delayed", "Not paid fully", "Not sure"], linked_standard: "PS2", topic: "timely_payment", risk_weight: "critical" },
+    { id: "local-w-2", section: "Worker Safety", question_text: "Have workers received safety induction or job-specific safety training?", answer_type: "multiple_choice", options: ["Yes", "Only briefly", "No", "Not sure"], linked_standard: "PS2/PS4", topic: "safety_training", risk_weight: "critical" },
+    { id: "local-w-3", section: "Worker Safety", question_text: "Is proper PPE provided and replaced when needed?", answer_type: "multiple_choice", options: ["Yes", "Partly", "No", "Not sure"], linked_standard: "PS2", topic: "ppe_provided", risk_weight: "critical" },
+    { id: "local-w-4", section: "Worker Grievance and Trust", question_text: "Are workers afraid of losing work or being punished if they complain?", answer_type: "multiple_choice", options: ["No", "Some workers are afraid", "Yes", "Prefer not to say"], linked_standard: "PS2", topic: "worker_retaliation_fear", risk_weight: "critical" },
+    { id: "local-w-5", section: "Worker Grievance and Trust", question_text: "Are there serious worker issues not reflected in official reports?", answer_type: "yes_no_with_followup", options: ["Yes", "No", "Not sure"], linked_standard: "PS2", topic: "hidden_worker_issues", risk_weight: "critical" }
+  ]
+};
+
+function validationSections() {
+  return [...new Set(validationFlow.questions.map((item) => item.section || "Questions"))];
+}
+
+function questionsForCurrentSection() {
+  const sections = validationSections();
+  const section = sections[validationFlow.sectionIndex] || sections[0];
+  return validationFlow.questions.filter((item) => (item.section || "Questions") === section);
+}
+
+function respondentTypeForConnection(connection, followup = "") {
+  if (["Worker", "Contractor worker", "Former worker"].includes(connection)) return "worker";
+  if (connection === "Other" && followup === "Working conditions") return "worker";
+  if (connection === "Other" && followup === "Both") return "both";
+  return "community";
+}
+
+async function startValidationQuestionnaire() {
+  const projectId = document.querySelector("#validationProject").value;
+  const connection = document.querySelector("#validationConnection").value;
+  const followup = document.querySelector("#validationFollowup")?.value || "";
+  const respondentType = respondentTypeForConnection(connection, followup);
+  const questionSet = respondentType === "worker" ? "worker" : "community";
+  validationFlow = { step: "questions", projectId, respondentConnection: connection === "Other" ? `Other - ${followup || "Not specified"}` : connection, respondentType, questionSet, sectionIndex: 0, questions: [], answers: {}, loading: true, receipt: null };
+  renderCommunityPortal();
+  try {
+    validationFlow.questions = await fetchValidationQuestions(projectId, questionSet);
+  } catch {
+    validationFlow.questions = validationQuestionFallbacks[questionSet];
+  }
+  validationFlow.loading = false;
+  renderCommunityPortal();
+}
+
+function renderValidationInput(question) {
+  const saved = validationFlow.answers[question.id] || {};
+  if (question.answer_type === "text") {
+    return `<textarea data-validation-answer="${question.id}" placeholder="Write in your own words.">${escapeHtml(saved.answer || "")}</textarea>`;
+  }
+  const options = question.options || [];
+  return `
+    <select data-validation-answer="${question.id}">
+      <option value="">Select an answer</option>
+      ${options.map((option) => `<option value="${escapeHtml(option)}" ${saved.answer === option ? "selected" : ""}>${escapeHtml(option)}</option>`).join("")}
+    </select>
+    ${question.answer_type === "yes_no_with_followup" && saved.answer === "Yes" ? `<textarea data-validation-followup="${question.id}" placeholder="Please add detail for verification.">${escapeHtml(saved.follow_up_text || "")}</textarea>` : ""}
+  `;
+}
+
+function renderValidationPortal() {
+  const project = state.projects.find((item) => item.id === validationFlow.projectId) || state.projects[0];
+  const sections = validationSections();
+  const currentQuestions = questionsForCurrentSection();
+  if (validationFlow.receipt) {
+    return `<section class="community-public validation-public"><header class="community-public-header"><button class="btn" type="button" data-community-home>Back to HydroComply</button></header><main class="validation-shell"><section class="validation-card receipt-card"><p class="eyebrow">Validation received</p><h2>Your validation response has been received.</h2><p>Reference number: <strong>${escapeHtml(validationFlow.receipt.reference_number)}</strong></p><p>Your response may be used to compare project reports with ground-level feedback.</p><button class="btn primary" type="button" data-validation-reset>Submit another response</button></section></main></section>`;
+  }
+  if (validationFlow.step === "screening") {
+    return `<section class="community-public validation-public"><header class="community-public-header"><button class="btn" type="button" data-community-home>Back to HydroComply</button><span>English / Nepali</span></header><main class="validation-shell"><section class="validation-card"><p class="eyebrow">Ground-truth validation</p><h2>Help verify what project reports say.</h2><p>Choose a project and answer the questionnaire that matches your connection. You can stay anonymous.</p><div class="field"><label for="validationProject">Hydropower project</label><select id="validationProject">${state.projects.map((item) => `<option value="${item.id}" ${item.id === validationFlow.projectId ? "selected" : ""}>${escapeHtml(item.name)}</option>`).join("")}</select></div><div class="field"><label for="validationConnection">How are you connected to this project?</label><select id="validationConnection">${["Affected landowner", "Nearby resident", "Indigenous community member", "Downstream water user", "Local business", "Worker", "Contractor worker", "Former worker", "Other"].map((item) => `<option>${item}</option>`).join("")}</select></div><div class="field" id="validationFollowupWrap"><label for="validationFollowup">If other, select the closest topic</label><select id="validationFollowup"><option>Community impact</option><option>Working conditions</option><option>Both</option></select></div><button class="btn primary" type="button" data-validation-start>Continue</button></section></main></section>`;
+  }
+  if (validationFlow.loading) {
+    return `<section class="community-public validation-public"><header class="community-public-header"><button class="btn" type="button" data-community-home>Back</button></header><main class="validation-shell"><section class="validation-card"><h2>Loading validation questions...</h2><p>Please wait while HydroComply prepares the questionnaire.</p></section></main></section>`;
+  }
+  if (validationFlow.step === "review") {
+    return `<section class="community-public validation-public"><header class="community-public-header"><button class="btn" type="button" data-community-home>Back to HydroComply</button><span>${escapeHtml(project.name)}</span></header><main class="validation-shell"><section class="validation-card"><p class="eyebrow">Review response</p><h2>Check your answers before submitting.</h2><div class="validation-review">${validationFlow.questions.map((question) => `<article><strong>${escapeHtml(question.question_text)}</strong><p>${escapeHtml(validationFlow.answers[question.id]?.answer || "")}</p>${validationFlow.answers[question.id]?.follow_up_text ? `<small>${escapeHtml(validationFlow.answers[question.id].follow_up_text)}</small>` : ""}</article>`).join("")}</div><div class="toolbar"><button class="btn" type="button" data-validation-back>Back</button><button class="btn primary" type="button" data-validation-submit>Submit validation</button></div></section></main></section>`;
+  }
+  return `<section class="community-public validation-public"><header class="community-public-header"><button class="btn" type="button" data-community-home>Back to HydroComply</button><span>${escapeHtml(project.name)}</span></header><main class="validation-shell"><section class="validation-card"><div class="wizard-progress"><span>Section ${validationFlow.sectionIndex + 1} of ${sections.length}</span><strong>${escapeHtml(sections[validationFlow.sectionIndex] || "Questions")}</strong></div><div class="question-stack">${currentQuestions.map((question) => `<article class="question-card"><span>${escapeHtml(question.linked_standard || "IFC")}</span><label>${escapeHtml(question.question_text)}</label>${renderValidationInput(question)}</article>`).join("")}</div><div class="toolbar"><button class="btn" type="button" data-validation-prev ${validationFlow.sectionIndex === 0 ? "disabled" : ""}>Back</button><button class="btn primary" type="button" data-validation-next>${validationFlow.sectionIndex === sections.length - 1 ? "Review" : "Next"}</button></div></section></main></section>`;
+}
+
+function validationCanContinue() {
+  return questionsForCurrentSection().every((question) => (validationFlow.answers[question.id]?.answer || "").trim());
+}
+
+async function submitValidationPortal() {
+  const payload = { respondent_type: validationFlow.respondentType, respondent_connection: validationFlow.respondentConnection, anonymous: true, gps_allowed: false, photo_allowed: false, answers: validationFlow.questions.map((question) => ({ question_id: question.id, answer: validationFlow.answers[question.id]?.answer || "", follow_up_text: validationFlow.answers[question.id]?.follow_up_text || null })).filter((item) => item.answer) };
+  try {
+    validationFlow.receipt = await submitValidationResponses(validationFlow.projectId, payload);
+    await loadVerificationData(validationFlow.projectId);
+  } catch {
+    validationFlow.receipt = { reference_number: referenceFor(validationFlow.projectId), status: "local_fallback" };
+    state.validationSubmissions.unshift({ id: crypto.randomUUID(), projectId: validationFlow.projectId, ...payload, referenceNumber: validationFlow.receipt.reference_number, createdAt: new Date().toISOString() });
+    saveState();
+  }
+  renderCommunityPortal();
+}
+
+function bindValidationPortalEvents() {
+  document.querySelector("[data-community-home]")?.addEventListener("click", () => navigate("publicHome"));
+  document.querySelector("[data-validation-reset]")?.addEventListener("click", () => {
+    validationFlow = { ...validationFlow, step: "screening", receipt: null, answers: {}, questions: [] };
+    renderCommunityPortal();
+  });
+  document.querySelector("[data-validation-start]")?.addEventListener("click", startValidationQuestionnaire);
+  document.querySelector("#validationConnection")?.addEventListener("change", (event) => {
+    document.querySelector("#validationFollowupWrap").hidden = event.target.value !== "Other";
+  });
+  if (document.querySelector("#validationConnection")) document.querySelector("#validationFollowupWrap").hidden = document.querySelector("#validationConnection").value !== "Other";
+  document.querySelectorAll("[data-validation-answer]").forEach((field) => {
+    field.addEventListener("input", () => {
+      validationFlow.answers[field.dataset.validationAnswer] = { ...(validationFlow.answers[field.dataset.validationAnswer] || {}), answer: field.value };
+      if (field.tagName === "SELECT") renderCommunityPortal();
+    });
+  });
+  document.querySelectorAll("[data-validation-followup]").forEach((field) => {
+    field.addEventListener("input", () => {
+      validationFlow.answers[field.dataset.validationFollowup] = { ...(validationFlow.answers[field.dataset.validationFollowup] || {}), follow_up_text: field.value };
+    });
+  });
+  document.querySelector("[data-validation-prev]")?.addEventListener("click", () => {
+    validationFlow.sectionIndex = Math.max(0, validationFlow.sectionIndex - 1);
+    renderCommunityPortal();
+  });
+  document.querySelector("[data-validation-next]")?.addEventListener("click", () => {
+    if (!validationCanContinue()) return toast("Please answer each question in this section.");
+    if (validationFlow.sectionIndex >= validationSections().length - 1) validationFlow.step = "review";
+    else validationFlow.sectionIndex += 1;
+    renderCommunityPortal();
+  });
+  document.querySelector("[data-validation-back]")?.addEventListener("click", () => {
+    validationFlow.step = "questions";
+    renderCommunityPortal();
+  });
+  document.querySelector("[data-validation-submit]")?.addEventListener("click", submitValidationPortal);
+}
+
 function renderCommunityPortal() {
   {
+    document.querySelector("#communityPortal").innerHTML = renderValidationPortal();
+    bindValidationPortalEvents();
+    return;
     document.querySelector("#communityPortal").innerHTML = `
       <section class="community-public">
         <header class="community-public-header">
@@ -1059,8 +1522,9 @@ function renderPortalShell(key = roleKey()) {
 
 function complianceMetrics(projectId = state.selectedProjectId) {
   const scores = state.scores[projectId];
+  const readiness = average(scores);
   return {
-    readiness: average(scores),
+    readiness,
     criticalGaps: state.findings.filter((item) => item.projectId === projectId && item.severity === "Critical" && item.status !== "Closed").length,
     missingEvidence: state.evidence.filter((item) => item.projectId === projectId && ["Missing", "Filed", "Disputed", "Rejected", "Expired"].includes(item.status)).length,
     openGrievances: state.grievances.filter((item) => item.projectId === projectId && !["Closed", "Verified"].includes(item.status)).length,
@@ -1091,6 +1555,10 @@ function projectRoomTabs() {
     ["matrix", "IFC Matrix"],
     ["evidence", "Evidence"],
     ["grievances", "Grievances"],
+    ["validation", "Validation"],
+    ["controversies", "Controversies"],
+    ["manual-verification", "Manual Checks"],
+    ["trust-report", "Trust Report"],
     ["actions", "Actions"],
     ["audit", "Audit"],
     ["reports", "Reports"]
@@ -1101,6 +1569,85 @@ function projectRoomTabs() {
 function bindProjectRoomControls() {
   document.querySelectorAll("[data-tab-view]").forEach((button) => {
     button.addEventListener("click", () => setView(button.dataset.tabView));
+  });
+}
+
+const projectFilterOptions = [
+  ["all", "All"],
+  ["baseline_pending", "Baseline pending"],
+  ["ai_analyzed", "AI analyzed"],
+  ["human_verified", "Human verified"],
+  ["needs_ocr", "Needs OCR"]
+];
+
+function projectMatchesFilter(item) {
+  if (projectFilter === "all") return true;
+  if (projectFilter === "baseline_pending") return item.baselineStatus === "baseline_pending" || !hasComplianceScore(item.id);
+  if (projectFilter === "ai_analyzed") return item.baselineStatus === "ai_baseline_created" || item.reportStatus === "ai_analyzed" || hasComplianceScore(item.id);
+  if (projectFilter === "human_verified") return item.baselineStatus === "human_verified";
+  if (projectFilter === "needs_ocr") return item.reportStatus === "needs_ocr";
+  return true;
+}
+
+function renderProjectFilterControls() {
+  return `<div class="project-filter-bar" role="group" aria-label="Project filter">
+    ${projectFilterOptions.map(([value, label]) => `<button class="${projectFilter === value ? "active" : ""}" type="button" data-project-filter="${value}">${label}</button>`).join("")}
+  </div>`;
+}
+
+function renderProjectDirectory(title = "Project Dashboard") {
+  const rows = state.projects.filter(projectMatchesFilter).map((item) => {
+    const score = average(state.scores[item.id]);
+    const status = statusForScore(score);
+    const openFindings = state.findings.filter((findingItem) => findingItem.projectId === item.id && findingItem.status !== "Closed").length;
+    const pending = isBaselinePendingProject(item);
+    return `
+      <article class="project-directory-row ${item.id === state.selectedProjectId ? "selected" : ""}">
+        <div>
+          <div class="directory-titleline">
+            <h3>${escapeHtml(item.name)}</h3>
+            <span class="status-pill status-${projectStatusClass(item)}">${escapeHtml(projectStatusLabel(item))}</span>
+          </div>
+          <p class="muted">${escapeHtml(item.capacity || "Capacity pending")} - ${escapeHtml(item.river || "River pending")} - ${escapeHtml(item.district || "Region pending")}</p>
+          <p class="muted">${pending ? "Report available, AI analysis not yet run." : `${openFindings} open compliance gap(s).`}</p>
+        </div>
+        <div class="directory-score">
+          <strong>${Number.isFinite(score) ? score : "No score"}</strong>
+          <span>${pending ? "No compliance score yet" : `${status} readiness`}</span>
+        </div>
+        <button class="btn" type="button" data-select-project="${item.id}">Inspect</button>
+      </article>
+    `;
+  }).join("");
+
+  return `
+    <section class="panel project-directory">
+      <div class="panel-header">
+        <div>
+          <h3>${escapeHtml(title)}</h3>
+          <p>Report-backed projects stay baseline pending until a PDF is uploaded and analyzed.</p>
+        </div>
+        ${renderProjectFilterControls()}
+      </div>
+      <div class="project-directory-list">${rows || empty("No projects match this filter.")}</div>
+    </section>
+  `;
+}
+
+function bindProjectDirectoryControls() {
+  document.querySelectorAll("[data-project-filter]").forEach((button) => {
+    button.addEventListener("click", () => {
+      projectFilter = button.dataset.projectFilter;
+      render();
+    });
+  });
+  document.querySelectorAll("[data-select-project]").forEach((button) => {
+    button.addEventListener("click", () => {
+      state.selectedProjectId = button.dataset.selectProject;
+      saveState();
+      render();
+      toast(`${project().name} selected.`);
+    });
   });
 }
 
@@ -1138,6 +1685,8 @@ function renderDashboard() {
 function renderDeveloperDashboard() {
   {
     const metrics = complianceMetrics();
+    const selectedProject = project();
+    const selectedPending = isBaselinePendingProject(selectedProject);
     const priorityFixes = projectItems("findings")
       .filter((item) => ["Critical", "High"].includes(item.severity) && item.status !== "Closed")
       .slice(0, 3);
@@ -1151,8 +1700,18 @@ function renderDeveloperDashboard() {
     ];
     document.querySelector("#dashboard").innerHTML = `
       ${projectRoomHeader("dashboard")}
+      ${selectedPending ? `
+        <section class="pending-baseline-panel">
+          <div>
+            <span class="status-pill status-pending">Baseline pending</span>
+            <h3>No compliance score yet</h3>
+            <p>Report available, AI analysis not yet run. Upload the report in AI Document Scan to extract text and create a reviewed baseline.</p>
+          </div>
+          <button class="btn primary" type="button" data-hero-view="analyst">Upload report</button>
+        </section>
+      ` : ""}
       <section class="developer-kpi-grid">
-        <article class="score-card"><span>Readiness score</span><strong>${metrics.readiness}/100</strong><p>Current IFC readiness after open gaps and evidence trust are considered.</p></article>
+        <article class="score-card"><span>Readiness score</span><strong>${readinessText(metrics.readiness)}</strong><p>${selectedPending ? "Baseline has not been generated from the report yet." : "Current IFC readiness after open gaps and evidence trust are considered."}</p></article>
         <article class="score-card danger"><span>Critical blockers</span><strong>${metrics.criticalGaps}</strong><p>Mandatory evidence gaps before lender review.</p></article>
         <article class="score-card warning"><span>Open grievances</span><strong>${metrics.openGrievances}</strong><p>Community cases still active in this project room.</p></article>
         <article class="score-card warning"><span>Overdue actions</span><strong>${metrics.overdueActions}</strong><p>Commitments past their response date.</p></article>
@@ -1162,7 +1721,7 @@ function renderDeveloperDashboard() {
         <div class="panel priority-panel">
           <div class="panel-header"><div><h3>Priority Fixes Before Lender Review</h3><p>What the project team should fix next.</p></div><button class="btn primary" data-hero-view="analyst" type="button">Run AI scan</button></div>
           <div class="priority-list">
-            ${priorityFixes.map((item) => {
+            ${selectedPending ? empty("No findings yet. Run AI analysis after uploading the PDF report.") : priorityFixes.map((item) => {
               const linkedAction = actionForFinding(item);
               return `<article class="priority-item">
                 <span class="severity severity-${severityClass(item.severity)}">${escapeHtml(item.standard)} ${escapeHtml(item.severity)}</span>
@@ -1182,11 +1741,13 @@ function renderDeveloperDashboard() {
         <div class="panel-header"><div><h3>Recent Activity</h3><p>Latest accountability events for this project room.</p></div></div>
         <div class="audit-timeline compact">${state.auditLogs.slice(0, 5).map(renderAuditTimelineItem).join("")}</div>
       </section>
+      ${renderProjectDirectory("Project Dashboard")}
     `;
     document.querySelectorAll("[data-hero-view]").forEach((button) => {
       button.addEventListener("click", () => setView(button.dataset.heroView));
     });
     bindProjectRoomControls();
+    bindProjectDirectoryControls();
     return;
   }
   const redStandards = standards.filter((standard) => statusForScore(selectedScores()[standard.code]) === "Red").length;
@@ -1327,7 +1888,9 @@ function metric(label, value, hint, icon = "📌", type = "", counter = null) {
 function renderLenderDashboard() {
   {
     const metrics = complianceMetrics();
-    const readiness = Math.max(0, metrics.readiness - metrics.criticalGaps * 8 - metrics.highRiskGrievances * 4);
+    const readiness = Number.isFinite(metrics.readiness)
+      ? Math.max(0, metrics.readiness - metrics.criticalGaps * 8 - metrics.highRiskGrievances * 4)
+      : null;
     const blockers = projectItems("findings").filter((item) => ["Critical", "High"].includes(item.severity) && item.status !== "Closed");
     const verified = projectItems("evidence").filter((item) => item.status === "Verified");
     const filed = projectItems("evidence").filter((item) => item.status === "Filed");
@@ -1338,10 +1901,10 @@ function renderLenderDashboard() {
       <section class="lender-summary">
         <div>
           <p class="eyebrow">Investment Risk Review</p>
-          <h2>${escapeHtml(project().name)} is ${readiness >= 75 ? "finance-ready" : "not finance-ready"}</h2>
-          <p>Mandatory PS1, PS5, and PS7 evidence remains unverified.</p>
+          <h2>${escapeHtml(project().name)} is ${Number.isFinite(readiness) ? (readiness >= 75 ? "finance-ready" : "not finance-ready") : "baseline pending"}</h2>
+          <p>${Number.isFinite(readiness) ? "Mandatory PS1, PS5, and PS7 evidence remains unverified." : "Report available, AI analysis not yet run. No lender score has been generated."}</p>
         </div>
-        <div class="readiness-meter"><strong>${readiness}/100</strong><span>Readiness</span></div>
+        <div class="readiness-meter"><strong>${readinessText(readiness)}</strong><span>Readiness</span></div>
       </section>
       <section class="trust-panel">
         <article><span>Verified Evidence</span><strong>${verified.length} / ${required} required</strong></article>
@@ -1349,7 +1912,7 @@ function renderLenderDashboard() {
         <article><span>Grievance Risk</span><strong>${metrics.highRiskGrievances} high-risk unresolved</strong></article>
       </section>
       <section class="panel">
-        <div class="panel-header"><div><h3>Blocking Issues</h3><p>Read-only finance review of unresolved IFC blockers.</p></div><button class="btn primary" type="button" data-report-export>Export lender summary</button></div>
+        <div class="panel-header"><div><h3>Blocking Issues</h3><p>Read-only finance review of unresolved IFC blockers.</p></div><span class="status-pill status-${Number.isFinite(readiness) ? (readiness >= 75 ? "green" : "red") : "pending"}">${Number.isFinite(readiness) ? (readiness >= 75 ? "Finance-ready" : "Not finance-ready") : "Baseline pending"}</span><button class="btn primary" type="button" data-report-export>Export lender summary</button></div>
         <div class="table-wrap">
           <table class="table">
             <thead><tr><th>IFC Standard</th><th>Issue</th><th>Severity</th><th>Evidence status</th><th>Owner</th><th>Due date</th></tr></thead>
@@ -1513,19 +2076,14 @@ function renderConsultantDashboard() {
 function renderRegulatorDashboard() {
   const rows = state.projects.map((item) => {
     const metrics = complianceMetrics(item.id);
-    return `<div class="project-row"><div><h3>${escapeHtml(item.name)}</h3><p class="muted">${escapeHtml(item.district)}</p></div><strong>${metrics.readiness}</strong><span>${metrics.openGrievances} grievances</span><span>${metrics.overdueActions} overdue</span><button class="btn" data-select-project="${item.id}" type="button">Inspect</button></div>`;
+    return `<div class="project-row"><div><h3>${escapeHtml(item.name)}</h3><p class="muted">${escapeHtml(item.district || "Region pending")}</p></div><strong>${scoreOrPending(metrics.readiness)}</strong><span class="status-pill status-${projectStatusClass(item)}">${escapeHtml(projectStatusLabel(item))}</span><span>${metrics.openGrievances} grievances</span><span>${metrics.overdueActions} overdue</span><button class="btn" data-select-project="${item.id}" type="button">Inspect</button></div>`;
   }).join("");
   document.querySelector("#dashboard").innerHTML = `
     <section class="portal-hero"><div><p class="eyebrow">Regulator / Reviewer portal</p><h2>Project Monitoring & Submission Review</h2><p class="hero-subtitle">Track submission completeness, monitoring status, unresolved commitments, grievance trends, and inspection readiness.</p></div></section>
     <section class="panel"><div class="panel-header"><div><h3>Projects</h3><p>Completeness and inspection readiness overview.</p></div></div>${rows}</section>
+    ${renderProjectDirectory("Filtered Project Dashboard")}
   `;
-  document.querySelectorAll("[data-select-project]").forEach((button) => {
-    button.addEventListener("click", () => {
-      state.selectedProjectId = button.dataset.selectProject;
-      saveState();
-      render();
-    });
-  });
+  bindProjectDirectoryControls();
 }
 
 function renderCommunityLiaisonDashboard() {
@@ -2106,14 +2664,16 @@ function lenderSummary() {
   const critical = projectItems("findings").filter((item) => item.severity === "Critical" && item.status !== "Closed");
   const high = projectItems("findings").filter((item) => item.severity === "High" && item.status !== "Closed");
   const openActions = projectItems("actions").filter((item) => item.status !== "Closed").length;
+  const score = average(selectedScores());
+  const status = statusForScore(score);
   return `
     <div class="grid">
       <div class="card">
         <div class="finding-topline">
           <h3>${escapeHtml(project().name)} has ${critical.length} critical and ${high.length} high-risk open findings.</h3>
-          <span class="status-pill status-${statusForScore(average(selectedScores())).toLowerCase()}">${average(selectedScores())} overall</span>
+          <span class="status-pill status-${status.toLowerCase()}">${Number.isFinite(score) ? `${score} overall` : "Baseline pending"}</span>
         </div>
-        <p class="muted" style="margin-top:14px">The main financing readiness blockers are mandatory PS1 management-system evidence, PS5 land and livelihood follow-up, and PS7 applicability evidence where local ethnic or Indigenous communities may be affected.</p>
+        <p class="muted" style="margin-top:14px">${Number.isFinite(score) ? "The main financing readiness blockers are mandatory PS1 management-system evidence, PS5 land and livelihood follow-up, and PS7 applicability evidence where local ethnic or Indigenous communities may be affected." : "Report available, AI analysis not yet run. No lender readiness findings have been generated."}</p>
       </div>
       <div class="card">
         <h3>${openActions} corrective actions are currently assigned.</h3>
@@ -2243,14 +2803,17 @@ function recalculateScores() {
 }
 
 function renderMatrix() {
+  const scores = selectedScores();
   document.querySelector("#matrix").innerHTML = `
+    ${!scores ? `<section class="pending-baseline-panel"><div><span class="status-pill status-pending">Baseline pending</span><h3>No IFC matrix score yet</h3><p>Report available, AI analysis not yet run. The matrix will populate after PDF extraction and analysis.</p></div><button class="btn primary" type="button" data-matrix-upload>Upload report</button></section>` : ""}
     <div class="ps-grid">
       ${standards.map((standard) => {
-        const score = selectedScores()[standard.code];
+        const score = scores?.[standard.code];
         const status = statusForScore(score);
         const standardFindings = projectItems("findings").filter((item) => item.standard === standard.code && item.status !== "Closed");
         const linkedEvidence = projectItems("evidence").filter((item) => item.linkedStandard === standard.code);
-        const scoreColor = status === "Green" ? "var(--green)" : status === "Amber" ? "var(--amber)" : "var(--red)";
+        const scoreColor = status === "Green" ? "var(--green)" : status === "Amber" ? "var(--amber)" : status === "Pending" ? "var(--muted)" : "var(--red)";
+        const ringScore = Number.isFinite(score) ? score : 0;
         return `
           <article class="ps-card">
             <div class="scoreline">
@@ -2258,7 +2821,7 @@ function renderMatrix() {
                 <p class="eyebrow">${standard.code}</p>
                 <h3>${standard.name}</h3>
               </div>
-              <div class="score-ring" style="--score:${score};--score-color:${scoreColor}"><span>${score}</span></div>
+              <div class="score-ring" style="--score:${ringScore};--score-color:${scoreColor}"><span>${scoreOrPending(score)}</span></div>
             </div>
             <span class="status-pill status-${status.toLowerCase()}">${status}</span>
             <p class="muted">${whyScore(standard.code, score, standardFindings, linkedEvidence)}</p>
@@ -2272,9 +2835,11 @@ function renderMatrix() {
       }).join("")}
     </div>
   `;
+  document.querySelector("[data-matrix-upload]")?.addEventListener("click", () => setView("analyst"));
 }
 
 function whyScore(code, score, findings, evidenceItems) {
+  if (!Number.isFinite(score)) return "Pending because no report-backed baseline analysis has been generated yet.";
   if (score < 50) {
     const top = findings[0];
     return top ? `Capped red because ${top.title.toLowerCase()}.` : "Capped red because mandatory verified evidence is missing.";
@@ -2643,6 +3208,110 @@ function routingCard(item) {
   `;
 }
 
+function currentProjectVerification(collection) {
+  return collection.filter((item) => (item.project_id || item.projectId) === state.selectedProjectId);
+}
+
+function renderValidationQuestionnaires() {
+  const node = document.querySelector("#validation");
+  if (!node) return;
+  node.innerHTML = `
+    ${projectRoomHeader("validation")}
+    <div class="split-grid">
+      <article class="panel">
+        <p class="eyebrow">Public validation portal</p>
+        <h3>Routed questionnaires for community members and workers</h3>
+        <p class="muted">The public flow screens the respondent connection, loads the matching question set, and creates a receipt after submission.</p>
+        <div class="metric-grid small">
+          <div class="metric"><span>Community questions</span><strong>${validationQuestionFallbacks.community.length}+</strong></div>
+          <div class="metric"><span>Worker questions</span><strong>${validationQuestionFallbacks.worker.length}+</strong></div>
+          <div class="metric"><span>Project</span><strong>${escapeHtml(project().name)}</strong></div>
+        </div>
+        <div class="toolbar"><button class="btn primary" type="button" data-open-validation-portal>Open public validation portal</button></div>
+      </article>
+      <article class="panel">
+        <p class="eyebrow">Question routing</p>
+        <div class="question-stack compact">
+          <article class="question-card"><span>Step 1</span><label>Screen respondent connection to the project.</label></article>
+          <article class="question-card"><span>Step 2</span><label>Route community members to PS1, PS5, PS7, PS8, PS4, and PS6 validation questions.</label></article>
+          <article class="question-card"><span>Step 3</span><label>Route workers to PS2 labor, safety, payment, grievance, and trust questions.</label></article>
+        </div>
+      </article>
+    </div>
+  `;
+  node.querySelector("[data-open-validation-portal]")?.addEventListener("click", () => navigate("community"));
+}
+
+function renderControversyCenter() {
+  const node = document.querySelector("#controversies");
+  if (!node) return;
+  const items = currentProjectVerification(state.controversies);
+  node.innerHTML = `
+    ${projectRoomHeader("controversies")}
+    <div class="panel-header"><div><p class="eyebrow">AI controversy detection</p><h3>Claims that require human verification</h3></div><button class="btn" type="button" data-refresh-verification>Refresh from backend</button></div>
+    <div class="card-grid">
+      ${items.length ? items.map((item) => `
+        <article class="card controversy-card">
+          <div class="finding-topline"><div><p class="eyebrow">${escapeHtml(item.standard || "IFC")} - ${escapeHtml(item.topic || "validation")}</p><h3>${escapeHtml(item.contradiction_summary || "Manual verification required")}</h3></div><span class="severity severity-${severityClass(item.severity || "Medium")}">${escapeHtml(item.severity || "Medium")}</span></div>
+          <p class="muted"><strong>Report claim:</strong> ${escapeHtml(item.report_claim || "")}</p>
+          <p class="muted"><strong>Human feedback:</strong> ${escapeHtml(item.human_feedback_summary || "")}</p>
+          <p><strong>Recommended verification:</strong> ${escapeHtml(item.recommended_verification || "")}</p>
+          <span class="tag">Status: ${escapeHtml(item.status || "open")}</span>
+        </article>
+      `).join("") : emptyState("No controversies have been detected for this project yet. Submit validation feedback or refresh after the backend is seeded.")}
+    </div>
+  `;
+  node.querySelector("[data-refresh-verification]")?.addEventListener("click", () => loadVerificationData());
+}
+
+function renderManualVerificationDesk() {
+  const node = document.querySelector("#manual-verification");
+  if (!node) return;
+  const tasks = currentProjectVerification(state.manualTasks);
+  node.innerHTML = `
+    ${projectRoomHeader("manual-verification")}
+    <div class="panel-header"><div><p class="eyebrow">Manual Verification Desk</p><h3>Human checks for contested claims</h3></div><button class="btn" type="button" data-refresh-verification>Refresh from backend</button></div>
+    <div class="card-grid">
+      ${tasks.length ? tasks.map((item) => `
+        <article class="card manual-task-card">
+          <p class="eyebrow">${escapeHtml(item.verification_method || "verification")} - Due ${escapeHtml(item.due_date || "TBD")}</p>
+          <h3>${escapeHtml(item.question_to_verify || "Verify contested claim")}</h3>
+          <p class="muted">${escapeHtml(item.required_evidence || "")}</p>
+          <div class="split-meta"><span class="tag">Assigned: ${escapeHtml(item.assigned_to || "Verification team")}</span><span class="tag">Status: ${escapeHtml(item.status || "open")}</span></div>
+        </article>
+      `).join("") : emptyState("No manual verification tasks yet. They are created automatically when validation answers contradict report claims.")}
+    </div>
+  `;
+  node.querySelector("[data-refresh-verification]")?.addEventListener("click", () => loadVerificationData());
+}
+
+function renderLenderTrustReport() {
+  const node = document.querySelector("#trust-report");
+  if (!node) return;
+  const report = currentProjectVerification(state.lenderTrustReports).at(-1);
+  node.innerHTML = `
+    ${projectRoomHeader("trust-report")}
+    <div class="panel-header"><div><p class="eyebrow">Lender Trust Report</p><h3>Document claims plus ground-truth verification</h3></div><button class="btn" type="button" data-refresh-verification>Refresh from backend</button></div>
+    ${report ? `
+      <section class="trust-score-panel">
+        <div><span>Final trust score</span><strong>${escapeHtml(report.final_trust_score)}</strong></div>
+        <div><span>Risk level</span><strong>${escapeHtml(report.final_risk_level)}</strong></div>
+        <div><span>Unresolved controversies</span><strong>${escapeHtml(report.unresolved_controversies_count)}</strong></div>
+      </section>
+      <article class="panel">
+        <h3>${escapeHtml(report.funding_recommendation)}</h3>
+        <p class="muted">${escapeHtml(report.summary)}</p>
+        <div class="split-meta">
+          <span class="tag">Community validation: ${escapeHtml(report.community_validation_score ?? "Pending")}</span>
+          <span class="tag">Worker validation: ${escapeHtml(report.worker_validation_score ?? "Pending")}</span>
+          <span class="tag">Manual verification: ${escapeHtml(report.manual_verification_score ?? "Pending")}</span>
+        </div>
+      </article>
+    ` : emptyState("No lender trust report has been generated yet. Refresh after backend startup or submit a validation response.")}
+  `;
+  node.querySelector("[data-refresh-verification]")?.addEventListener("click", () => loadVerificationData());
+}
+
 function renderActions() {
   const rows = projectItems("actions").map((item) => `
     <article class="card">
@@ -2796,12 +3465,12 @@ function renderReports() {
         <button class="btn primary" type="button" id="copyReport">Copy summary</button>
       </div>
       <div class="grid three">
-        ${detail("IFC readiness", `${metrics.readiness}/100`)}
+        ${detail("IFC readiness", readinessText(metrics.readiness))}
         ${detail("Critical gaps", String(metrics.criticalGaps))}
         ${detail("Unverified evidence", String(metrics.unverifiedEvidence))}
         ${detail("Open grievances", String(metrics.openGrievances))}
         ${detail("Overdue actions", String(metrics.overdueActions))}
-        ${detail("Status", metrics.criticalGaps ? "Not finance-ready" : "Review-ready")}
+        ${detail("Status", Number.isFinite(metrics.readiness) ? (metrics.criticalGaps ? "Not finance-ready" : "Review-ready") : "Baseline pending")}
       </div>
       <div class="card" style="margin-top:20px">
         <h3>Blocking issues</h3>
@@ -2810,7 +3479,7 @@ function renderReports() {
     </section>
   `;
   document.querySelector("#copyReport")?.addEventListener("click", () => {
-    const summary = `${project().name} readiness ${metrics.readiness}/100. Critical gaps: ${metrics.criticalGaps}. Unverified evidence: ${metrics.unverifiedEvidence}. Open grievances: ${metrics.openGrievances}. Overdue actions: ${metrics.overdueActions}.`;
+    const summary = `${project().name} readiness ${readinessText(metrics.readiness)}. Critical gaps: ${metrics.criticalGaps}. Unverified evidence: ${metrics.unverifiedEvidence}. Open grievances: ${metrics.openGrievances}. Overdue actions: ${metrics.overdueActions}.`;
     navigator.clipboard?.writeText(summary);
     toast("Report summary copied.");
   });
