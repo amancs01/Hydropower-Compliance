@@ -34,6 +34,7 @@ const nepaliGrievance = "हाम्रो जग्गाको मुआब�
 const initialState = {
   selectedProjectId: "middle-tamor",
   role: "Lender",
+  dataSource: "Local demo fallback",
   projects: [
     {
       id: "khimti",
@@ -110,6 +111,8 @@ const initialState = {
 let state = loadState();
 let currentRoute = "publicHome";
 let currentView = "dashboard";
+let selectedAnalyzerFile = null;
+let latestComplianceAnalysis = null;
 
 const reviewerRoles = new Set(["Lender", "Lender / Investor", "Consultant", "Reviewer", "Regulator / Reviewer"]);
 
@@ -283,6 +286,208 @@ function saveState() {
   localStorage.setItem("hydrocomply-state", JSON.stringify(state));
 }
 
+const API_BASE_URL = "http://127.0.0.1:8000";
+
+async function apiGet(path) {
+  const response = await fetch(`${API_BASE_URL}${path}`);
+  if (!response.ok) throw new Error(`Backend request failed: ${path}`);
+  return response.json();
+}
+
+function fetchProjects() {
+  return apiGet("/api/projects");
+}
+
+function fetchProject(projectId) {
+  return apiGet(`/api/projects/${projectId}`);
+}
+
+function fetchProjectFindings(projectId) {
+  return apiGet(`/api/projects/${projectId}/findings`);
+}
+
+function fetchProjectEvidence(projectId) {
+  return apiGet(`/api/projects/${projectId}/evidence`);
+}
+
+function fetchProjectGrievances(projectId) {
+  return apiGet(`/api/projects/${projectId}/grievances`);
+}
+
+function fetchProjectActions(projectId) {
+  return apiGet(`/api/projects/${projectId}/actions`);
+}
+
+function fetchProjectAudit(projectId) {
+  return apiGet(`/api/projects/${projectId}/audit`);
+}
+
+function fetchProjectScoreHistory(projectId) {
+  return apiGet(`/api/projects/${projectId}/score-history`);
+}
+
+async function loadBackendProjectData() {
+  try {
+    const projects = await fetchProjects();
+    if (!Array.isArray(projects) || !projects.length) return;
+
+    const details = await Promise.all(projects.map(async (projectItem) => {
+      const [findings, evidence, grievances, actions, auditLogs, scoreHistory] = await Promise.all([
+        fetchProjectFindings(projectItem.id),
+        fetchProjectEvidence(projectItem.id),
+        fetchProjectGrievances(projectItem.id),
+        fetchProjectActions(projectItem.id),
+        fetchProjectAudit(projectItem.id),
+        fetchProjectScoreHistory(projectItem.id)
+      ]);
+      return { projectItem, findings, evidence, grievances, actions, auditLogs, scoreHistory };
+    }));
+
+    state.projects = details.map(({ projectItem }) => ({
+      id: projectItem.id,
+      name: projectItem.name,
+      capacity: projectItem.capacity_mw ? `${projectItem.capacity_mw} MW` : "",
+      river: projectItem.river || "",
+      district: projectItem.district || "",
+      promoter: projectItem.promoter || "",
+      status: projectItem.status || "",
+      cod: projectItem.cod || "",
+      description: projectItem.description || projectItem.source_note || ""
+    }));
+
+    state.scores = {};
+    state.findings = [];
+    state.evidence = [];
+    state.grievances = [];
+    state.actions = [];
+    state.auditLogs = [];
+
+    details.forEach(({ projectItem, findings, evidence, grievances, actions, auditLogs, scoreHistory }) => {
+      const latest = projectItem.latest_score || scoreHistory[scoreHistory.length - 1] || {};
+      state.scores[projectItem.id] = {
+        PS1: latest.ps1_score ?? 50,
+        PS2: latest.ps2_score ?? 60,
+        PS3: latest.ps3_score ?? 60,
+        PS4: latest.ps4_score ?? 60,
+        PS5: latest.ps5_score ?? 50,
+        PS6: latest.ps6_score ?? 60,
+        PS7: latest.ps7_score ?? 50,
+        PS8: latest.ps8_score ?? 70
+      };
+      state.findings.push(...findings.map(mapBackendFinding));
+      state.evidence.push(...evidence.map(mapBackendEvidence));
+      state.grievances.push(...grievances.map(mapBackendGrievance));
+      state.actions.push(...actions.map(mapBackendAction));
+      state.auditLogs.push(...auditLogs.map(mapBackendAudit));
+    });
+
+    if (!state.projects.some((item) => item.id === state.selectedProjectId)) {
+      state.selectedProjectId = state.projects[0].id;
+    }
+    state.dataSource = "Backend database";
+    saveState();
+    renderProjectOptions();
+    render();
+    toast("Loaded project data from backend database.");
+  } catch {
+    state.dataSource = "Local demo fallback";
+    updateTopbarContext();
+  }
+}
+
+function mapBackendFinding(item) {
+  return finding(
+    item.id,
+    item.project_id,
+    item.standard,
+    item.severity,
+    item.title,
+    item.description || item.title,
+    parseJsonArray(item.recommended_actions_json).join("; ") || "Upload evidence and request review.",
+    item.verification_status || "pending_review",
+    item.score || 70,
+    "Backend database"
+  );
+}
+
+function mapBackendEvidence(item) {
+  return {
+    id: item.id,
+    projectId: item.project_id,
+    linkedStandard: item.standard,
+    evidenceType: item.evidence_type,
+    status: normalizeStatus(item.status),
+    summary: item.summary || "",
+    source: item.source || "",
+    capturedAt: (item.created_at || "").slice(0, 10),
+    confidential: Boolean(item.confidential),
+    uploadedBy: item.uploaded_by || "Demo team",
+    verifiedBy: item.verified_by || ""
+  };
+}
+
+function mapBackendGrievance(item) {
+  return {
+    id: item.id,
+    projectId: item.project_id,
+    submittedBy: item.submitted_by,
+    anonymous: item.anonymous,
+    originalText: item.original_text,
+    translatedText: item.translated_text || item.original_text,
+    aiSummary: item.ai_summary,
+    category: item.category,
+    linkedStandard: item.linked_standard,
+    severity: item.severity,
+    confidentialityLevel: item.confidentiality_level,
+    status: normalizeStatus(item.status),
+    referenceNumber: item.reference_number,
+    receivedAt: item.created_at
+  };
+}
+
+function mapBackendAction(item) {
+  return {
+    id: item.id,
+    projectId: item.project_id,
+    findingId: item.finding_id || "",
+    grievanceId: item.grievance_id || "",
+    owner: item.owner,
+    title: item.title,
+    description: item.description || "",
+    status: normalizeStatus(item.status),
+    dueDate: item.due_date || "",
+    completedAt: item.completed_at || ""
+  };
+}
+
+function mapBackendAudit(item) {
+  return {
+    id: item.id,
+    entityType: item.entity_type,
+    entityId: item.entity_id,
+    actor: item.actor,
+    action: item.action,
+    detail: item.detail || "",
+    createdAt: item.created_at
+  };
+}
+
+function parseJsonArray(value) {
+  try {
+    const parsed = JSON.parse(value || "[]");
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function normalizeStatus(value) {
+  return String(value || "")
+    .split("_")
+    .map((part) => part ? part[0].toUpperCase() + part.slice(1) : "")
+    .join(" ");
+}
+
 function project() {
   return state.projects.find((item) => item.id === state.selectedProjectId);
 }
@@ -379,7 +584,7 @@ function setupChrome() {
   });
 
   const projectSelect = document.querySelector("#projectSelect");
-  projectSelect.innerHTML = state.projects.map((item) => `<option value="${item.id}">${escapeHtml(item.name)}</option>`).join("");
+  renderProjectOptions();
   projectSelect.value = state.selectedProjectId;
   projectSelect.addEventListener("change", (event) => {
     state.selectedProjectId = event.target.value;
@@ -440,6 +645,7 @@ function render() {
   renderRoleSelection();
   renderCommunityPortal();
   renderPortalShell(roleKey());
+  renderProjectOptions();
   document.querySelector("#projectSelect").value = state.selectedProjectId;
   renderDashboard();
   renderAnalyst();
@@ -458,7 +664,13 @@ function render() {
 
 function updateTopbarContext() {
   const roleBadge = document.querySelector("#roleBadge");
-  if (roleBadge) roleBadge.textContent = state.role;
+  if (roleBadge) roleBadge.textContent = `${state.role} - ${state.dataSource || "Local demo fallback"}`;
+}
+
+function renderProjectOptions() {
+  const projectSelect = document.querySelector("#projectSelect");
+  if (!projectSelect) return;
+  projectSelect.innerHTML = state.projects.map((item) => `<option value="${item.id}">${escapeHtml(item.name)}</option>`).join("");
 }
 
 function renderLandingPage() {
@@ -1445,8 +1657,9 @@ function renderAnalyst() {
           <div class="field">
             <label for="docFile">Upload PDF or text file</label>
             <input id="docFile" type="file" accept=".pdf,.txt,.md,.csv" />
-            <p class="file-status">Supported: PDF, TXT, MD, CSV. PDF text will be extracted automatically.</p>
+            <p class="file-status">Supported: PDF, TXT, MD, CSV. PDFs are extracted through the local FastAPI backend.</p>
             <p id="fileStatus" class="file-status">No file uploaded yet.</p>
+            <div id="pdfExtractSummary" class="pdf-extract-summary" hidden></div>
           </div>
           <div class="field full">
             <label for="docText">Project document text</label>
@@ -1456,6 +1669,7 @@ function renderAnalyst() {
         <div class="toolbar" style="margin-top:20px">
           <button class="btn" id="loadSample" type="button"><span class="tool-icon" data-icon="upload"></span>Load sample EIA</button>
           <button class="btn primary" id="runAnalysis" type="button"><span class="tool-icon" data-icon="play"></span>Run AI analysis</button>
+          <button class="btn primary" id="runRealAiAnalysis" type="button">Run Real AI Analysis</button>
           <button class="btn" id="resetDemo" type="button">Reset demo data</button>
         </div>
       </section>
@@ -1514,6 +1728,15 @@ function renderAnalyst() {
       </div>
       <div class="analysis-output">${findings.map(renderFindingCard).join("") || empty("Run the analyzer to generate IFC-specific findings.")}</div>
     </section>
+    <section class="panel" style="margin-top:32px">
+      <div class="panel-header">
+        <div>
+          <h3>Real AI Compliance Result</h3>
+          <p>FastAPI analyzes uploaded PDFs with PyMuPDF, chunk retrieval, optional Groq translation, and Groq compliance reasoning. If the backend is unavailable, a local demo fallback is shown clearly.</p>
+        </div>
+      </div>
+      <div id="realAiResult">${latestComplianceAnalysis ? renderComplianceAnalysisResult(latestComplianceAnalysis) : empty("Upload a PDF, then run real AI analysis.")}</div>
+    </section>
   `;
 
   document.querySelector("#loadSample").addEventListener("click", () => {
@@ -1521,6 +1744,7 @@ function renderAnalyst() {
     toast("Sample Middle Tamor EIA text loaded.");
   });
   document.querySelector("#runAnalysis").addEventListener("click", runDocumentAnalysis);
+  document.querySelector("#runRealAiAnalysis").addEventListener("click", runRealAiAnalysis);
   document.querySelector("#resetDemo").addEventListener("click", () => {
     state = structuredClone(initialState);
     saveState();
@@ -1530,21 +1754,30 @@ function renderAnalyst() {
   document.querySelector("#docFile").addEventListener("change", async (event) => {
     const file = event.target.files[0];
     if (!file) return;
+    selectedAnalyzerFile = file;
 
     const docText = document.querySelector("#docText");
     const fileStatus = document.querySelector("#fileStatus");
+    const pdfExtractSummary = document.querySelector("#pdfExtractSummary");
 
     try {
-      toast(`Reading ${file.name}...`);
+      const isPdf = file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf");
+      toast(isPdf ? `Extracting ${file.name} with FastAPI...` : `Reading ${file.name}...`);
       if (fileStatus) {
         fileStatus.className = "file-status";
-        fileStatus.textContent = `Reading ${file.name}...`;
+        fileStatus.textContent = isPdf ? `Extracting ${file.name} with FastAPI backend...` : `Reading ${file.name}...`;
+      }
+      if (pdfExtractSummary) {
+        pdfExtractSummary.hidden = true;
+        pdfExtractSummary.innerHTML = "";
       }
 
       let extractedText = "";
+      let pdfResult = null;
 
-      if (file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf")) {
-        extractedText = await extractPdfText(file);
+      if (isPdf) {
+        pdfResult = await extractPdfTextFromBackend(file);
+        extractedText = pagesTextToDocumentText(pdfResult.pages_text);
       } else {
         extractedText = await file.text();
       }
@@ -1561,22 +1794,286 @@ function renderAnalyst() {
       }
 
       docText.value = extractedText;
-      const statusMessage = `${file.name} loaded. ${extractedText.length.toLocaleString()} characters extracted.`;
+      const statusMessage = pdfResult
+        ? `${pdfResult.filename} loaded. ${pdfResult.pages} pages and ${pdfResult.text_length.toLocaleString()} characters extracted.`
+        : `${file.name} loaded. ${extractedText.length.toLocaleString()} characters extracted.`;
       if (fileStatus) {
         fileStatus.className = "file-status";
         fileStatus.textContent = statusMessage;
       }
+      if (pdfResult && pdfExtractSummary) {
+        pdfExtractSummary.hidden = false;
+        pdfExtractSummary.innerHTML = renderPdfExtractSummary(pdfResult);
+      }
       toast(statusMessage);
     } catch (error) {
       console.error(error);
+      const isPdf = file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf");
+      const message = messageForPdfUploadError(error, file, isPdf);
       if (fileStatus) {
         fileStatus.className = "file-status error";
-        fileStatus.textContent = "PDF extraction failed. Try another PDF or paste text manually.";
+        fileStatus.textContent = message;
       }
-      toast(`Could not read ${file.name}. Please try another file or paste the text manually.`);
+      if (pdfExtractSummary) {
+        pdfExtractSummary.hidden = false;
+        pdfExtractSummary.innerHTML = `<strong>Extraction failed</strong><p>${escapeHtml(message)}</p>`;
+      }
+      toast(message);
     }
   });
   bindProjectRoomControls();
+}
+
+async function extractPdfTextFromBackend(file) {
+  const formData = new FormData();
+  formData.append("file", file);
+
+  let response;
+  try {
+    response = await fetch("http://127.0.0.1:8000/api/pdf/extract", {
+      method: "POST",
+      body: formData
+    });
+  } catch (error) {
+    error.code = "BACKEND_OFFLINE";
+    throw error;
+  }
+
+  let payload = null;
+  try {
+    payload = await response.json();
+  } catch {
+    payload = null;
+  }
+
+  if (!response.ok) {
+    const detail = payload?.detail || {};
+    const error = new Error(payload?.message || detail.message || "PDF extraction failed.");
+    error.status = response.status;
+    error.code = payload?.error_code || detail.error || payload?.error || "PDF_EXTRACTION_FAILED";
+    error.payload = payload;
+    throw error;
+  }
+
+  return payload;
+}
+
+function pagesTextToDocumentText(pagesText = []) {
+  return pagesText
+    .map((item) => `--- Page ${item.page} ---\n${item.text || ""}`)
+    .join("\n\n")
+    .trim();
+}
+
+function renderPdfExtractSummary(result) {
+  return `
+    <div class="pdf-summary-grid">
+      <div><span>Filename</span><strong>${escapeHtml(result.filename)}</strong></div>
+      <div><span>Pages</span><strong>${result.pages}</strong></div>
+      <div><span>Text length</span><strong>${Number(result.text_length).toLocaleString()}</strong></div>
+    </div>
+    <div class="pdf-preview">
+      <span>Preview</span>
+      <p>${escapeHtml(result.preview || "No preview returned.")}</p>
+    </div>
+  `;
+}
+
+function messageForPdfUploadError(error, file, isPdf) {
+  if (error.code === "OCR_REQUIRED") {
+    return "This PDF appears scanned or image-based. OCR is required.";
+  }
+  if (isPdf && (error.code === "BACKEND_OFFLINE" || error instanceof TypeError)) {
+    return "Backend is not running. Start FastAPI with uvicorn main:app --reload.";
+  }
+  return `Could not read ${file.name}. Please try another file or paste the text manually.`;
+}
+
+async function analyzeCompliancePdf(file) {
+  const formData = new FormData();
+  formData.append("file", file);
+
+  let response;
+  try {
+    response = await fetch("http://127.0.0.1:8000/api/compliance/analyze", {
+      method: "POST",
+      body: formData
+    });
+  } catch (error) {
+    error.code = "BACKEND_OFFLINE";
+    throw error;
+  }
+
+  const payload = await response.json().catch(() => null);
+  if (!response.ok || payload?.status === "error") {
+    const error = new Error(payload?.message || "Compliance analysis failed.");
+    error.code = payload?.error_code || "COMPLIANCE_ANALYSIS_FAILED";
+    error.payload = payload;
+    throw error;
+  }
+  return payload;
+}
+
+async function runRealAiAnalysis() {
+  const resultNode = document.querySelector("#realAiResult");
+  if (!selectedAnalyzerFile) {
+    toast("Upload a PDF first, then run real AI analysis.");
+    if (resultNode) resultNode.innerHTML = empty("Upload a PDF first, then run real AI analysis.");
+    return;
+  }
+  if (!selectedAnalyzerFile.name.toLowerCase().endsWith(".pdf") && selectedAnalyzerFile.type !== "application/pdf") {
+    toast("Real AI analysis currently expects a PDF upload.");
+    if (resultNode) resultNode.innerHTML = empty("Real AI analysis currently expects a PDF upload.");
+    return;
+  }
+
+  if (resultNode) {
+    resultNode.innerHTML = `<div class="empty-state">Analyzing PDF with FastAPI and AI compliance services...</div>`;
+  }
+  toast("Running real AI compliance analysis...");
+
+  try {
+    latestComplianceAnalysis = await analyzeCompliancePdf(selectedAnalyzerFile);
+    if (resultNode) resultNode.innerHTML = renderComplianceAnalysisResult(latestComplianceAnalysis);
+    toast(`AI compliance analysis complete: ${latestComplianceAnalysis.scores.overall}/100, ${latestComplianceAnalysis.scores.risk_level} risk.`);
+  } catch (error) {
+    const message = messageForComplianceAnalysisError(error);
+    if (error.code === "BACKEND_OFFLINE") {
+      latestComplianceAnalysis = localComplianceFallbackResult(selectedAnalyzerFile);
+      if (resultNode) resultNode.innerHTML = renderComplianceAnalysisResult(latestComplianceAnalysis, true);
+      toast("Backend unavailable. Showing Local demo fallback.");
+      return;
+    }
+    latestComplianceAnalysis = null;
+    if (resultNode) resultNode.innerHTML = `<div class="empty-state">${escapeHtml(message)}</div>`;
+    toast(message);
+  }
+}
+
+function messageForComplianceAnalysisError(error) {
+  if (error.code === "OCR_REQUIRED") {
+    return "This PDF appears scanned or image-based. OCR is required.";
+  }
+  if (error.code === "BACKEND_OFFLINE" || error instanceof TypeError) {
+    return "Backend is not running. Start FastAPI with uvicorn main:app --reload.";
+  }
+  if (error.code === "MODEL_JSON_PARSE_ERROR") {
+    return "The AI model returned an invalid response. Please retry the analysis.";
+  }
+  if (error.code === "GROQ_API_ERROR") {
+    return "Groq analysis failed. Check the backend logs and GROQ_API_KEY.";
+  }
+  return error.message || "Compliance analysis failed.";
+}
+
+function localComplianceFallbackResult(file) {
+  return {
+    status: "success",
+    analysis_id: "local-demo-fallback",
+    document: {
+      id: "local-demo",
+      filename: file.name,
+      pages: 0,
+      text_length: document.querySelector("#docText")?.value.length || 0,
+      contains_nepali: false
+    },
+    scores: { ps1: 80, ps5: 40, ps7: 20, overall: 56, risk_level: "High" },
+    summary: "The document contains some environmental and social management information, but important land acquisition, livelihood restoration, and Indigenous Peoples evidence remain weak or missing.",
+    findings: [
+      {
+        standard: "PS1",
+        score: 80,
+        severity: "Medium",
+        title: "PS1 mostly addressed but evidence needs strengthening",
+        missing_requirements: ["Complete ESMS evidence", "Stakeholder engagement plan", "Operational grievance mechanism"],
+        partial_compliance: ["EIA-style assessment is present", "Some consultation evidence appears available"],
+        risks: ["One-time assessment may not prove ongoing management"],
+        recommended_actions: ["Upload ESMS, SEP, grievance mechanism, monitoring matrix, and corrective action register"],
+        evidence: [{ text: "Local demo fallback evidence snippet from the uploaded text.", page: 1 }]
+      },
+      {
+        standard: "PS5",
+        score: 40,
+        severity: "High",
+        title: "PS5 land and livelihood evidence is weak",
+        missing_requirements: ["Replacement-cost methodology", "Resettlement Action Plan", "Livelihood restoration monitoring", "Post-compensation follow-up"],
+        partial_compliance: ["Land or compensation is referenced"],
+        risks: ["Compensation may not meet IFC PS5 expectations", "Livelihood restoration may be untracked"],
+        recommended_actions: ["Upload RAP, affected household list, payment proof, replacement-cost methodology, and livelihood monitoring records"],
+        evidence: [{ text: "Local demo fallback evidence snippet from the uploaded text.", page: 1 }]
+      },
+      {
+        standard: "PS7",
+        score: 20,
+        severity: "Critical",
+        title: "PS7 Indigenous Peoples evidence is missing",
+        missing_requirements: ["PS7 applicability screening", "Indigenous Peoples Plan", "FPIC or consultation evidence where applicable", "Benefit-sharing evidence"],
+        partial_compliance: ["Ethnic or local communities may be referenced"],
+        risks: ["Potential Indigenous Peoples impacts may be unresolved"],
+        recommended_actions: ["Verify PS7 applicability and upload IPP, FPIC/consultation records, benefit-sharing plan, and grievance evidence"],
+        evidence: [{ text: "Local demo fallback evidence snippet from the uploaded text.", page: 1 }]
+      }
+    ],
+    raw_model_used: { translation_model: "not_used", compliance_model: "Local demo fallback" }
+  };
+}
+
+function renderComplianceAnalysisResult(result, isLocalFallback = false) {
+  return `
+    <div class="compliance-result ${isLocalFallback ? "fallback" : ""}">
+      ${isLocalFallback ? `<div class="fallback-banner">Local demo fallback. Start the FastAPI backend for real AI analysis.</div>` : ""}
+      <section class="compliance-result-summary">
+        <div>
+          <p class="eyebrow">${escapeHtml(result.document.filename)}</p>
+          <h3>${escapeHtml(result.summary)}</h3>
+          <div class="split-meta">
+            <span class="tag">Pages: ${result.document.pages}</span>
+            <span class="tag">Text: ${Number(result.document.text_length).toLocaleString()} chars</span>
+            <span class="tag">Nepali detected: ${result.document.contains_nepali ? "Yes" : "No"}</span>
+            <span class="tag">Model: ${escapeHtml(result.raw_model_used.compliance_model)}</span>
+          </div>
+        </div>
+        <div class="compliance-score-card">
+          <strong>${result.scores.overall}/100</strong>
+          <span>${escapeHtml(result.scores.risk_level)} risk</span>
+        </div>
+      </section>
+      <section class="score-strip">
+        <article><span>PS1</span><strong>${result.scores.ps1}</strong></article>
+        <article><span>PS5</span><strong>${result.scores.ps5}</strong></article>
+        <article><span>PS7</span><strong>${result.scores.ps7}</strong></article>
+      </section>
+      <section class="compliance-findings">
+        ${result.findings.map(renderComplianceFinding).join("")}
+      </section>
+    </div>
+  `;
+}
+
+function renderComplianceFinding(finding) {
+  return `
+    <article class="compliance-finding-card">
+      <div class="finding-topline">
+        <div>
+          <p class="eyebrow">${escapeHtml(finding.standard)} - Score ${finding.score}</p>
+          <h3>${escapeHtml(finding.title)}</h3>
+        </div>
+        <span class="severity severity-${severityClass(finding.severity)}">${escapeHtml(finding.severity)}</span>
+      </div>
+      ${listBlock("Missing requirements", finding.missing_requirements)}
+      ${listBlock("Partial compliance", finding.partial_compliance)}
+      ${listBlock("Risks", finding.risks)}
+      ${listBlock("Recommended actions", finding.recommended_actions)}
+      <div class="evidence-snippets">
+        <strong>Evidence snippets</strong>
+        ${(finding.evidence || []).map((item) => `<blockquote>${escapeHtml(item.text)} <cite>Page ${item.page}</cite></blockquote>`).join("") || "<p class=\"muted\">No evidence snippets returned.</p>"}
+      </div>
+    </article>
+  `;
+}
+
+function listBlock(title, items = []) {
+  return `<div class="finding-list-block"><strong>${escapeHtml(title)}</strong><ul>${items.map((item) => `<li>${escapeHtml(item)}</li>`).join("") || "<li>None reported.</li>"}</ul></div>`;
 }
 
 async function extractPdfText(file) {
@@ -2362,3 +2859,4 @@ setupChrome();
 document.body.dataset.view = "dashboard";
 render();
 navigate("publicHome");
+loadBackendProjectData();
