@@ -215,39 +215,28 @@ const portalRoles = [
 const portalNav = {
   developer: [
     ["dashboard", "Overview", "layout"],
-    ["analyst", "AI Document Scan", "spark"],
-    ["matrix", "Compliance Gaps", "matrix"],
+    ["analyst", "AI Scan", "spark"],
+    ["matrix", "Matrix", "matrix"],
     ["evidence", "Evidence Vault", "vault"],
-    ["validation", "Validation Questionnaires", "message"],
-    ["controversies", "Controversy Center", "alert"],
-    ["manual-verification", "Manual Verification", "check"],
     ["grievances", "Grievances", "message"],
     ["actions", "Actions", "check"],
-    ["trust-report", "Trust Report", "rule"],
-    ["reports", "Reports", "rule"],
-    ["audit", "Audit Trail", "clock"]
+    ["validation", "Validation", "message"],
+    ["audit", "Audit", "clock"],
+    ["reports", "Reports", "rule"]
   ],
   lender: [
-    ["dashboard", "Portfolio Risk", "layout"],
-    ["matrix", "Project Review", "matrix"],
-    ["evidence", "Verified Evidence", "vault"],
+    ["dashboard", "Review", "layout"],
     ["trust-report", "Trust Report", "rule"],
-    ["controversies", "Controversy Center", "alert"],
-    ["manual-verification", "Verification Desk", "check"],
-    ["analyst", "Critical Gaps", "alert"],
-    ["grievances", "Grievance History", "message"],
-    ["audit", "Audit Trail", "clock"],
-    ["reports", "Export Report", "rule"]
+    ["evidence", "Evidence", "vault"],
+    ["controversies", "Controversies", "alert"],
+    ["audit", "Audit", "clock"],
+    ["reports", "Reports", "rule"]
   ],
   consultant: [
     ["dashboard", "Review Queue", "layout"],
-    ["analyst", "AI Findings", "spark"],
-    ["evidence", "Evidence Verification", "vault"],
-    ["validation", "Questionnaires", "message"],
-    ["manual-verification", "Manual Verification", "check"],
-    ["controversies", "Controversies", "alert"],
-    ["matrix", "Disputed Evidence", "matrix"],
-    ["grievances", "Comments", "message"],
+    ["evidence", "Evidence", "vault"],
+    ["analyst", "Findings", "spark"],
+    ["validation", "Validation", "message"],
     ["reports", "Reports", "rule"]
   ],
   regulator: [
@@ -261,14 +250,10 @@ const portalNav = {
     ["audit", "Inspection View", "clock"]
   ],
   "community-liaison": [
-    ["dashboard", "New Grievances", "layout"],
-    ["grievances", "Confidential Cases", "message"],
-    ["validation", "Validation Questionnaires", "message"],
-    ["controversies", "Controversy Center", "alert"],
-    ["manual-verification", "Manual Verification", "check"],
-    ["actions", "Response Deadlines", "check"],
-    ["audit", "Escalations", "clock"],
-    ["evidence", "Resolution Evidence", "vault"]
+    ["grievances", "Grievances", "message"],
+    ["validation", "Validation", "message"],
+    ["manual-verification", "Manual Checks", "check"],
+    ["actions", "Actions", "check"]
   ],
   admin: [
     ["dashboard", "Users", "layout"],
@@ -291,17 +276,17 @@ const portalTitles = {
 
 const views = {
   dashboard: { eyebrow: "Portfolio dashboard", title: "Finance-ready hydropower compliance intelligence" },
-  analyst: { eyebrow: "AI Compliance Analyst", title: "Read documents, detect IFC gaps, create actions" },
-  matrix: { eyebrow: "IFC PS1-PS8 gap matrix", title: "Explainable scores with evidence confidence" },
+  analyst: { eyebrow: "AI Document Scan", title: "Upload a report and detect IFC gaps" },
+  matrix: { eyebrow: "PS Matrix", title: "IFC status at a glance" },
   evidence: { eyebrow: "Evidence Vault", title: "Filed is not the same as verified" },
-  grievances: { eyebrow: "Community Grievance Center", title: "Plain-language complaints routed to IFC standards" },
+  grievances: { eyebrow: "Grievance Center", title: "Inbox for community cases" },
   validation: { eyebrow: "Validation Questionnaires", title: "Community and worker ground-truth validation" },
   controversies: { eyebrow: "Controversy Center", title: "Document claims compared with ground-level feedback" },
-  "manual-verification": { eyebrow: "Manual Verification Desk", title: "Human checks for contested claims" },
-  "trust-report": { eyebrow: "Lender Trust Report", title: "Document, feedback, and verification confidence" },
-  actions: { eyebrow: "Action Tracker", title: "Every gap becomes an accountable promise" },
-  rules: { eyebrow: "Transparent rule engine", title: "Scoring logic the reviewer can inspect" },
-  audit: { eyebrow: "Accountability trail", title: "Who knew, who acted, and what changed" }
+  "manual-verification": { eyebrow: "Manual Verification Desk", title: "Task workflow for contested claims" },
+  "trust-report": { eyebrow: "Lender Trust Report", title: "Credit-style compliance trust memo" },
+  actions: { eyebrow: "Actions", title: "Accountable work by status" },
+  rules: { eyebrow: "Rule Admin", title: "Scoring logic" },
+  audit: { eyebrow: "Audit Trail", title: "Accountability without clutter" }
 };
 
 function evidence(id, projectId, linkedStandard, evidenceType, status, summary, source, capturedAt, confidential) {
@@ -980,16 +965,16 @@ function renderLandingPage() {
       <div class="hero-copy">
         <p class="eyebrow">IFC compliance intelligence</p>
         <h2>AI compliance for hydropower finance.</h2>
-        <p>Upload EIA, IEE, RAP, ESMP, biodiversity, and grievance documents. HydroComply maps evidence to IFC standards, detects risks, and creates accountable actions.</p>
+        <p>Verify reports, community feedback, worker feedback, and manual checks before lender review.</p>
         <div class="hero-trust-list">
           <span>PDF evidence extraction</span>
-          <span>IFC PS1, PS5, PS7 gap detection</span>
-          <span>Audit trail for lenders</span>
+          <span>Ground feedback validation</span>
+          <span>Lender audit trail</span>
         </div>
         <div class="hero-actions">
-          <button class="btn primary" type="button" data-route="developer">Run AI Project Scan</button>
-          <button class="btn secondary" type="button" data-route="lender">View Lender Demo</button>
-          <button class="btn link" type="button" data-route="community">Submit Community Concern</button>
+          <button class="btn primary" type="button" data-route="developer">Run AI Scan</button>
+          <button class="btn secondary" type="button" data-route="lender">Open Lender Demo</button>
+          <button class="btn link" type="button" data-route="community">Submit Concern</button>
         </div>
       </div>
       <div class="hero-ai-pipeline trust-engine" aria-label="HydroComply Trust Verification Pipeline visual">
@@ -1076,15 +1061,15 @@ function renderLandingPage() {
     </section>
 
     <section class="public-section problem-band">
-      <div><p class="eyebrow">Problem</p><h3>Infrastructure finance teams need proof, not folders.</h3></div>
-      <p>Hydropower projects hold compliance evidence across EIA annexes, consultant files, grievance logs, monitoring records, and site commitments. HydroComply organizes those records into a single trust layer for developers, lenders, reviewers, and communities.</p>
+      <div><p class="eyebrow">Problem</p><h3>Finance teams need proof, not folders.</h3></div>
+      <p>HydroComply turns report claims, field feedback, and manual checks into one lender-ready trust record.</p>
     </section>
 
     <section class="public-section" id="demo">
       <div class="section-heading"><p class="eyebrow">How HydroComply works</p><h3>From project documents to finance-grade accountability.</h3></div>
       <div class="process-grid">
-        ${["Upload evidence", "Map to IFC standards", "Identify trust gaps", "Assign accountable actions"].map((item, index) => `
-          <article class="process-card"><span>${index + 1}</span><h3>${item}</h3><p class="muted">${["EIA, IEE, RAP, ESMP, monitoring reports, grievance logs, and field evidence enter one project room.", "Text is extracted and evidence is linked to PS1-PS8, project commitments, and transparent rules.", "Missing, stale, disputed, confidential, and unverified records become visible before financing.", "Each gap becomes an owner, due date, evidence request, status, and immutable audit event."][index]}</p></article>
+        ${["Upload report", "Check claims", "Compare feedback", "Create trust report"].map((item, index) => `
+          <article class="process-card"><span>${index + 1}</span><h3>${item}</h3><p class="muted">${["Add EIA, IEE, ESMP, RAP, or monitoring files.", "Extract commitments and map IFC gaps.", "Compare reports with community and worker feedback.", "Review unresolved risks before financing."][index]}</p></article>
         `).join("")}
       </div>
     </section>
@@ -1093,12 +1078,12 @@ function renderLandingPage() {
       <div class="section-heading"><p class="eyebrow">Role-based portals</p><h3>One project record, different trust lenses.</h3></div>
       <div class="role-mini-grid">
         ${[
-          ["Developer Workspace", "Fix critical evidence gaps before lender review."],
-          ["Lender / Investor Review", "Read-only finance risk view with verified evidence and audit trail."],
-          ["Consultant Verification Queue", "Review AI findings and approve or reject evidence."],
-          ["Regulator Monitoring View", "Check submission completeness and inspection readiness."],
-          ["Community Portal", "Simple public grievance intake in Nepali or English."],
-          ["Community Liaison Desk", "Manage response deadlines, confidentiality, and resolution evidence."]
+          ["Developer Workspace", "Fix gaps before lender review."],
+          ["Lender Review", "Review trust and unresolved risks."],
+          ["Consultant Queue", "Verify AI findings and evidence."],
+          ["Regulator View", "Check monitoring and commitments."],
+          ["Community Portal", "Submit feedback or concerns."],
+          ["Community Liaison", "Manage cases and responses."]
         ].map(([title, text]) => `<article><strong>${title}</strong><p>${text}</p></article>`).join("")}
       </div>
     </section>
@@ -1152,12 +1137,12 @@ function renderLandingPage() {
 
 function renderRoleSelection() {
   const roleCards = [
-    ["Developer Workspace", "Developer", "Upload evidence, close IFC gaps, manage actions, and prepare for lender review.", "DEV"],
-    ["Lender / Investor Review", "Lender / Investor", "Inspect verified evidence, unresolved blockers, grievance risk, and audit trail.", "LND"],
-    ["Consultant Verification Queue", "Consultant", "Review AI findings, verify evidence, reject weak documents, and add comments.", "CON"],
-    ["Regulator Monitoring View", "Regulator / Reviewer", "Check completeness, monitoring status, commitments, and inspection readiness.", "REG"],
-    ["Community Portal", "Community Member", "Submit a concern in simple Nepali or English and receive a reference number.", "COM"],
-    ["Community Liaison Desk", "Community Liaison", "Manage grievance response deadlines, confidentiality, escalation, and closure evidence.", "LIA"]
+    ["Developer Workspace", "Developer", "Fix gaps before lender review.", "DEV"],
+    ["Lender Review", "Lender / Investor", "Review trust, evidence, and unresolved risks.", "LND"],
+    ["Consultant Queue", "Consultant", "Verify AI findings and evidence.", "CON"],
+    ["Regulator View", "Regulator / Reviewer", "Check monitoring and commitments.", "REG"],
+    ["Community Portal", "Community Member", "Submit feedback or concerns.", "COM"],
+    ["Community Liaison", "Community Liaison", "Manage cases and responses.", "LIA"]
   ];
   document.querySelector("#roleSelection").innerHTML = `
     <header class="public-nav">
@@ -2189,6 +2174,55 @@ function detail(label, value) {
   return `<div class="card"><p class="eyebrow">${label}</p><h3>${escapeHtml(value)}</h3></div>`;
 }
 
+function pageHeader(title, subtitle, eyebrow = "") {
+  return `
+    <section class="ui-page-header">
+      ${eyebrow ? `<p class="eyebrow">${escapeHtml(eyebrow)}</p>` : ""}
+      <h2>${escapeHtml(title)}</h2>
+      <p>${escapeHtml(subtitle)}</p>
+    </section>
+  `;
+}
+
+function metricCard(label, value, tone = "") {
+  return `<article class="metric-card ${tone}"><span>${escapeHtml(label)}</span><strong>${escapeHtml(String(value))}</strong></article>`;
+}
+
+function statusPill(label, tone = "") {
+  return `<span class="status-pill status-${tone || statusTone(label)}">${escapeHtml(label)}</span>`;
+}
+
+function statusTone(label = "") {
+  const value = String(label).toLowerCase();
+  if (value.includes("verified") || value.includes("closed") || value.includes("green") || value.includes("complete")) return "green";
+  if (value.includes("high") || value.includes("critical") || value.includes("red") || value.includes("overdue") || value.includes("rejected") || value.includes("missing")) return "red";
+  if (value.includes("filed") || value.includes("pending") || value.includes("review") || value.includes("amber") || value.includes("progress")) return "amber";
+  return "blue";
+}
+
+function compactTable(headers, rows, emptyMessage = "No records yet.") {
+  return `
+    <div class="table-wrap">
+      <table class="table compact-table">
+        <thead><tr>${headers.map((item) => `<th>${escapeHtml(item)}</th>`).join("")}</tr></thead>
+        <tbody>${rows.length ? rows.join("") : `<tr><td colspan="${headers.length}">${empty(emptyMessage)}</td></tr>`}</tbody>
+      </table>
+    </div>
+  `;
+}
+
+function accordion(title, body, open = false) {
+  return `<details class="ui-accordion" ${open ? "open" : ""}><summary>${escapeHtml(title)}</summary><div>${body}</div></details>`;
+}
+
+function filterTabs(items, active = "All") {
+  return `<div class="filter-tabs">${items.map((item) => `<button class="${item === active ? "active" : ""}" type="button">${escapeHtml(item)}</button>`).join("")}</div>`;
+}
+
+function shortDate(value) {
+  return value ? new Date(value).toLocaleDateString() : "TBD";
+}
+
 function revealWords(text) {
   return text
     .split(" ")
@@ -2200,122 +2234,120 @@ function renderAnalyst() {
   const findings = projectItems("findings").filter((item) => item.aiGenerated);
   const evidenceItems = projectItems("evidence");
   const actions = projectItems("actions");
+  const textLength = document.querySelector("#docText")?.value?.length || 0;
+  const scanScores = latestComplianceAnalysis?.scores || { overall: average(selectedScores()), ps1: selectedScores()?.PS1, ps5: selectedScores()?.PS5, ps7: selectedScores()?.PS7, risk_level: statusForScore(average(selectedScores())) };
   document.querySelector("#analyst").innerHTML = `
     ${projectRoomHeader("analyst")}
-    <section class="document-intel-hero">
-      <div>
-        <p class="eyebrow">AI Document Intelligence</p>
-        <h2>AI Document Intelligence</h2>
-        <p>Upload or paste an EIA, IEE, RAP, ESMP, monitoring report, or grievance log. HydroComply extracts evidence, maps it to IFC PS1-PS8, and creates accountable actions.</p>
-      </div>
-      <div class="processing-steps">
-        ${["Reading document", "Extracting evidence", "Mapping to IFC PS1-PS8", "Detecting gaps", "Creating actions"].map((step, index) => `<span>${index + 1}. ${step}</span>`).join("")}
-      </div>
-    </section>
+    ${pageHeader("AI Document Scan", "Upload a report and detect IFC gaps.", "Workflow")}
 
-    <div class="intel-grid">
-      <section class="panel intel-column">
-        <div class="panel-header">
-          <div>
-            <h3>Uploaded / Pasted Document</h3>
-            <p>Upload EIA, IEE, RAP, ESMP, biodiversity report, monitoring report, or grievance log as PDF or text. HydroComply will extract the text, map evidence to IFC PS1-PS8, detect gaps, and create action items.</p>
+    <section class="scan-workflow">
+      <article class="workflow-step panel">
+        <div class="step-label">Step 1</div>
+        <div class="workflow-step-body">
+          <div class="panel-header compact">
+            <div><h3>Upload Report</h3><p>Drop a PDF, TXT, or MD file, or load the sample EIA.</p></div>
+            <span class="tag">PDF, TXT, MD</span>
           </div>
-          <span class="tag">No API key required</span>
-        </div>
-        <div class="form-grid">
-          <div class="field">
-            <label for="docType">Document type</label>
-            <select id="docType">
-              <option>EIA / ESIA</option>
-              <option>IEE</option>
-              <option>ESMP</option>
-              <option>RAP</option>
-              <option>Biodiversity report</option>
-              <option>Grievance log</option>
-            </select>
+          <div class="upload-card">
+            <input id="docFile" type="file" accept=".pdf,.txt,.md" />
+            <div>
+              <strong>Drop report here</strong>
+              <p>PDF, TXT, or MD supported</p>
+            </div>
+            <div class="toolbar">
+              <label class="btn" for="docFile">Choose file</label>
+              <button class="btn" id="loadSample" type="button">Load sample</button>
+            </div>
           </div>
-          <div class="field">
-            <label for="docFile">Upload PDF or text file</label>
-            <input id="docFile" type="file" accept=".pdf,.txt,.md,.csv" />
-            <p class="file-status">Supported: PDF, TXT, MD, CSV. PDFs are extracted through the local FastAPI backend.</p>
+          <div class="file-summary">
             <p id="fileStatus" class="file-status">No file uploaded yet.</p>
             <div id="pdfExtractSummary" class="pdf-extract-summary" hidden></div>
+            <div class="summary-grid">
+              <span>Project: <strong>${escapeHtml(project().name)}</strong></span>
+              <span>Characters: <strong>${textLength.toLocaleString()}</strong></span>
+              <span>Extraction: <strong>${textLength ? "Ready" : "Pending"}</strong></span>
+              <span>Nepali: <strong>${document.querySelector("#docText")?.value?.match(/[\u0900-\u097F]/) ? "Yes" : "No"}</strong></span>
+            </div>
           </div>
-          <div class="field full">
-            <label for="docText">Project document text</label>
-            <textarea id="docText" placeholder="Paste EIA, IEE, ESMP, RAP, monitoring report, consultation record, or grievance log text..."></textarea>
-          </div>
+          ${accordion("Paste text manually", `
+            <div class="field">
+              <label for="docType">Document type</label>
+              <select id="docType">
+                <option>EIA / ESIA</option>
+                <option>IEE</option>
+                <option>ESMP</option>
+                <option>RAP</option>
+                <option>Biodiversity report</option>
+                <option>Grievance log</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="docText">Project document text</label>
+              <textarea id="docText" placeholder="Paste report text...">${escapeHtml(document.querySelector("#docText")?.value || "")}</textarea>
+            </div>
+          `)}
+          ${accordion("View extracted text", `<pre class="raw-output">${escapeHtml(document.querySelector("#docText")?.value || "No extracted text yet.")}</pre>`)}
         </div>
-        <div class="toolbar" style="margin-top:20px">
-          <button class="btn" id="loadSample" type="button"><span class="tool-icon" data-icon="upload"></span>Load sample EIA</button>
-          <button class="btn primary" id="runAnalysis" type="button"><span class="tool-icon" data-icon="play"></span>Run AI analysis</button>
-          <button class="btn primary" id="runRealAiAnalysis" type="button">Run Real AI Analysis</button>
-          <button class="btn" id="resetDemo" type="button">Reset demo data</button>
-        </div>
-      </section>
+      </article>
 
-      <section class="panel intel-column">
-        <div class="panel-header">
-          <div>
-            <h3>AI Evidence Map</h3>
-            <p>Detected standards and evidence extracted for ${escapeHtml(project().name)}.</p>
+      <article class="workflow-step panel">
+        <div class="step-label">Step 2</div>
+        <div class="workflow-step-body">
+          <div class="panel-header compact">
+            <div><h3>Run Analysis</h3><p>Extract claims, map evidence, check gaps, and create actions.</p></div>
+          </div>
+          <div class="processing-steps clean">
+            ${["Extracting text", "Mapping evidence", "Checking IFC gaps", "Creating actions"].map((step) => `<span>${step}</span>`).join("")}
+          </div>
+          <div class="toolbar">
+            <button class="btn primary" id="runAnalysis" type="button"><span class="tool-icon" data-icon="play"></span>Run AI Scan</button>
+            <button class="btn" id="runRealAiAnalysis" type="button">Real AI</button>
+            <button class="btn" id="resetDemo" type="button">Reset demo</button>
           </div>
         </div>
-        <div class="evidence-chip-grid">
-          ${["Land acquisition detected", "Public consultation detected", "Biodiversity baseline detected", "Grievance register format detected", "Indigenous communities referenced"].map((item) => `<span>${item}</span>`).join("")}
-        </div>
-        <div class="evidence-map-list">
-          ${standards.map((standard) => {
-            const linkedEvidence = evidenceItems.filter((item) => item.linkedStandard === standard.code);
-            const linkedFindings = findings.filter((item) => item.standard === standard.code);
-            return `<article><span class="status-pill status-${linkedFindings.length ? "red" : linkedEvidence.some((item) => item.status === "Verified") ? "green" : "amber"}">${standard.code}</span><div><strong>${standard.name}</strong><p class="muted">${linkedEvidence.length} evidence references, ${linkedFindings.length} findings</p></div></article>`;
-          }).join("")}
-        </div>
-      </section>
+      </article>
 
-      <section class="panel intel-column">
-        <div class="panel-header">
-          <div>
-            <h3>IFC Risk Findings</h3>
-            <p>Project summary, critical gaps, missing documents, recommended actions, and confidence.</p>
+      <article class="workflow-step panel">
+        <div class="step-label">Step 3</div>
+        <div class="workflow-step-body">
+          <div class="panel-header compact">
+            <div><h3>Results</h3><p>Review summary first. Expand details only when needed.</p></div>
+          </div>
+          <div class="metric-grid four compact-metrics">
+            ${metricCard("Overall risk", scanScores.risk_level || statusForScore(scanScores.overall), statusTone(scanScores.risk_level || ""))}
+            ${metricCard("PS1 score", scoreOrPending(scanScores.ps1 ?? scanScores.PS1))}
+            ${metricCard("PS5 score", scoreOrPending(scanScores.ps5 ?? scanScores.PS5))}
+            ${metricCard("PS7 score", scoreOrPending(scanScores.ps7 ?? scanScores.PS7))}
+          </div>
+          <div class="result-tabs">
+            <input checked id="scanTabSummary" name="scanTabs" type="radio" />
+            <label for="scanTabSummary">Summary</label>
+            <input id="scanTabFindings" name="scanTabs" type="radio" />
+            <label for="scanTabFindings">Findings</label>
+            <input id="scanTabEvidence" name="scanTabs" type="radio" />
+            <label for="scanTabEvidence">Evidence</label>
+            <input id="scanTabActions" name="scanTabs" type="radio" />
+            <label for="scanTabActions">Actions</label>
+            <input id="scanTabRaw" name="scanTabs" type="radio" />
+            <label for="scanTabRaw">Raw output</label>
+            <section class="tab-panel summary-panel">
+              <p>${findings.length ? `${findings.length} AI findings and ${actions.length} actions are linked to this project.` : "Run a scan to generate the first compliance analysis."}</p>
+            </section>
+            <section class="tab-panel findings-panel">
+              <div class="analysis-output">${findings.map(renderComplianceFindingFromState).join("") || empty("No findings yet.")}</div>
+            </section>
+            <section class="tab-panel evidence-panel">
+              ${compactTable(["Evidence", "Standard", "Status", "Source"], evidenceItems.map((item) => `<tr><td>${escapeHtml(item.evidenceType)}</td><td>${escapeHtml(item.linkedStandard)}</td><td>${statusPill(item.status, statusClassForEvidence(item.status))}</td><td>${escapeHtml(item.source)}</td></tr>`), "No evidence extracted yet.")}
+            </section>
+            <section class="tab-panel actions-panel">
+              ${compactTable(["Action", "Owner", "Due", "Status"], actions.map((item) => `<tr><td>${escapeHtml(item.title)}</td><td>${escapeHtml(item.owner)}</td><td>${escapeHtml(item.dueDate)}</td><td>${statusPill(item.status)}</td></tr>`), "No actions yet.")}
+            </section>
+            <section class="tab-panel raw-panel">
+              <div id="realAiResult">${latestComplianceAnalysis ? renderComplianceAnalysisResult(latestComplianceAnalysis) : empty("Real AI output appears here after analysis.")}</div>
+            </section>
           </div>
         </div>
-        <div class="risk-finding-stack">
-          ${[
-            ["PS1 Critical Gap", "ESMS and grievance mechanism not found", "ESMS, SEP, grievance procedure", "Upload ESMS package"],
-            ["PS5 High Risk", "Replacement-cost methodology unclear", "RAP, compensation methodology", "Submit replacement-cost evidence"],
-            ["PS7 Critical Gap", "IPP/FPIC evidence missing", "IPP, FPIC applicability evidence", "Confirm PS7 applicability"],
-            ["PS6 Monitoring Weakness", "Recent biodiversity monitoring absent", "Biodiversity monitoring logs", "Upload monitoring evidence"]
-          ].map(([label, explanation, missing, actionText]) => `<article><span class="severity ${label.includes("High") ? "severity-high" : "severity-critical"}">${label}</span><p>${explanation}</p><small>Missing: ${missing}</small><strong>${actionText}</strong><em>Action created</em></article>`).join("")}
-        </div>
-        <div class="scan-summary">
-          ${detail("Project summary", project().status)}
-          ${detail("Detected standards", [...new Set(findings.map((item) => item.standard))].join(", ") || "Run scan")}
-          ${detail("Evidence extracted", String(evidenceItems.length))}
-          ${detail("Critical gaps", String(findings.filter((item) => item.severity === "Critical").length))}
-          ${detail("Linked actions created", String(actions.length))}
-          ${detail("Confidence score", `${Math.round(findings.reduce((sum, item) => sum + item.confidence, 0) / Math.max(1, findings.length))}%`)}
-        </div>
-      </section>
-    </div>
-
-    <section class="panel" style="margin-top:32px">
-      <div class="panel-header">
-        <div>
-          <h3>Critical Gaps & Recommended Actions</h3>
-          <p>Every finding can produce evidence requests, action ownership, due dates, and audit events.</p>
-        </div>
-      </div>
-      <div class="analysis-output">${findings.map(renderFindingCard).join("") || empty("Run the analyzer to generate IFC-specific findings.")}</div>
-    </section>
-    <section class="panel" style="margin-top:32px">
-      <div class="panel-header">
-        <div>
-          <h3>Real AI Compliance Result</h3>
-          <p>FastAPI analyzes uploaded PDFs with PyMuPDF, chunk retrieval, optional Groq translation, and Groq compliance reasoning. If the backend is unavailable, a local demo fallback is shown clearly.</p>
-        </div>
-      </div>
-      <div id="realAiResult">${latestComplianceAnalysis ? renderComplianceAnalysisResult(latestComplianceAnalysis) : empty("Upload a PDF, then run real AI analysis.")}</div>
+      </article>
     </section>
   `;
 
@@ -2728,6 +2760,25 @@ function renderFindingCard(item) {
   `;
 }
 
+function renderComplianceFindingFromState(item) {
+  const linkedEvidence = projectItems("evidence").find((evidenceItem) => evidenceItem.linkedStandard === item.standard);
+  return `
+    <article class="compliance-finding-card compact">
+      <div class="finding-topline">
+        <div>
+          <p class="eyebrow">${escapeHtml(item.standard)} ${escapeHtml(item.severity)}</p>
+          <h3>${escapeHtml(item.title)}</h3>
+        </div>
+        <span class="severity severity-${severityClass(item.severity)}">${escapeHtml(item.severity)}</span>
+      </div>
+      <p><strong>Missing:</strong> ${escapeHtml(item.rationale.split(".")[0] || "Evidence needs review")}</p>
+      <p><strong>Action:</strong> ${escapeHtml(item.recommendation.split(".")[0])}</p>
+      <p><strong>Evidence:</strong> ${escapeHtml(linkedEvidence?.source || "Not filed")}</p>
+      ${accordion("Expand details", `<p>${escapeHtml(item.rationale)}</p><p>${escapeHtml(item.recommendation)}</p>`)}
+    </article>
+  `;
+}
+
 function runDocumentAnalysis() {
   const text = document.querySelector("#docText").value.trim();
   if (!text) {
@@ -2826,38 +2877,37 @@ function recalculateScores() {
 
 function renderMatrix() {
   const scores = selectedScores();
+  const rows = standards.map((standard) => {
+    const score = scores?.[standard.code];
+    const status = statusForScore(score);
+    const standardFindings = projectItems("findings").filter((item) => item.standard === standard.code && item.status !== "Closed");
+    const linkedEvidence = projectItems("evidence").filter((item) => item.linkedStandard === standard.code);
+    const topGap = standardFindings[0]?.title || "No open blocker";
+    const evidenceStatus = linkedEvidence.length
+      ? `${linkedEvidence.filter((item) => item.status === "Verified").length} verified, ${linkedEvidence.filter((item) => item.status !== "Verified").length} pending`
+      : "Missing";
+    return `
+      <tr>
+        <td><strong>${standard.code}</strong><span class="muted block">${escapeHtml(standard.name)}</span></td>
+        <td>${scoreOrPending(score)}</td>
+        <td>${statusPill(status, status.toLowerCase())}</td>
+        <td>${escapeHtml(topGap)}</td>
+        <td>${escapeHtml(evidenceStatus)}</td>
+        <td><button class="btn" type="button" data-tab-view="evidence">View</button></td>
+      </tr>
+      <tr class="detail-row">
+        <td colspan="6">${accordion(`${standard.code} details`, `<p>${escapeHtml(whyScore(standard.code, score, standardFindings, linkedEvidence))}</p><p><strong>Required:</strong> ${escapeHtml(standard.evidence)}</p>`)}</td>
+      </tr>
+    `;
+  });
   document.querySelector("#matrix").innerHTML = `
+    ${projectRoomHeader("matrix")}
+    ${pageHeader("PS Matrix", "Check IFC status quickly.", "IFC PS1-PS8")}
     ${!scores ? `<section class="pending-baseline-panel"><div><span class="status-pill status-pending">Baseline pending</span><h3>No IFC matrix score yet</h3><p>Report available, AI analysis not yet run. The matrix will populate after PDF extraction and analysis.</p></div><button class="btn primary" type="button" data-matrix-upload>Upload report</button></section>` : ""}
-    <div class="ps-grid">
-      ${standards.map((standard) => {
-        const score = scores?.[standard.code];
-        const status = statusForScore(score);
-        const standardFindings = projectItems("findings").filter((item) => item.standard === standard.code && item.status !== "Closed");
-        const linkedEvidence = projectItems("evidence").filter((item) => item.linkedStandard === standard.code);
-        const scoreColor = status === "Green" ? "var(--green)" : status === "Amber" ? "var(--amber)" : status === "Pending" ? "var(--muted)" : "var(--red)";
-        const ringScore = Number.isFinite(score) ? score : 0;
-        return `
-          <article class="ps-card">
-            <div class="scoreline">
-              <div>
-                <p class="eyebrow">${standard.code}</p>
-                <h3>${standard.name}</h3>
-              </div>
-              <div class="score-ring" style="--score:${ringScore};--score-color:${scoreColor}"><span>${scoreOrPending(score)}</span></div>
-            </div>
-            <span class="status-pill status-${status.toLowerCase()}">${status}</span>
-            <p class="muted">${whyScore(standard.code, score, standardFindings, linkedEvidence)}</p>
-            <div class="split-meta">
-              <span class="tag">${standardFindings.length} findings</span>
-              <span class="tag">${linkedEvidence.length} evidence</span>
-              ${standard.mandatory ? '<span class="tag">mandatory gate</span>' : ""}
-            </div>
-          </article>
-        `;
-      }).join("")}
-    </div>
+    <section class="panel">${compactTable(["Standard", "Score", "Status", "Main gap", "Evidence status", "Action"], rows, "No matrix rows yet.")}</section>
   `;
   document.querySelector("[data-matrix-upload]")?.addEventListener("click", () => setView("analyst"));
+  bindProjectRoomControls();
 }
 
 function whyScore(code, score, findings, evidenceItems) {
@@ -2875,10 +2925,10 @@ function renderEvidence() {
   const reviewHint = canReviewEvidence() ? "" : ` title="${escapeHtml(state.role)} cannot verify evidence in this demo"`;
   {
     const items = projectItems("evidence");
-    const filters = ["All", "Verified", "Filed", "Expired", "Disputed", "Missing", "Confidential"];
+    const filters = ["All", "Verified", "Filed", "Under review", "Expired", "Disputed", "Missing", "Confidential"];
     const tableRows = items.map((item) => `
       <tr>
-        <td><strong>${escapeHtml(item.evidenceType)}</strong><p class="muted">${escapeHtml(item.summary)}</p></td>
+        <td><strong>${escapeHtml(item.evidenceType)}</strong>${accordion("Snippet", `<p>${escapeHtml(item.summary)}</p>`)}</td>
         <td>${escapeHtml(item.linkedStandard)}</td>
         <td>${escapeHtml(item.source)}</td>
         <td><span class="status-pill status-${statusClassForEvidence(item.status)}">${escapeHtml(item.status)}</span></td>
@@ -2891,11 +2941,15 @@ function renderEvidence() {
     `).join("");
     document.querySelector("#evidence").innerHTML = `
       ${projectRoomHeader("evidence")}
-      <section class="evidence-header panel">
-        <div><p class="eyebrow">Trust repository</p><h3>Evidence Vault</h3><p>Filed documents do not improve lender trust until verified.</p></div>
-        <div class="evidence-filters">${filters.map((filter) => `<button type="button">${filter}</button>`).join("")}</div>
+      ${pageHeader("Evidence Vault", "Filed documents do not become trusted until verified.", "Trust repository")}
+      <section class="panel compact-note">
+        <strong>Filed != Verified.</strong>
+        <span>Lenders trust only reviewed evidence.</span>
       </section>
-      <section class="evidence-layout">
+      <section class="panel">
+        ${filterTabs(filters)}
+      </section>
+      <section class="evidence-layout single">
         <div class="panel">
           <div class="table-wrap">
             <table class="table evidence-table">
@@ -2904,12 +2958,6 @@ function renderEvidence() {
             </table>
           </div>
         </div>
-        <aside class="panel evidence-explainer">
-          <h3>Why evidence status matters</h3>
-          <p><strong>Filed</strong> means uploaded by a project team.</p>
-          <p><strong>Verified</strong> means reviewed by a consultant or lender.</p>
-          <p><strong>Disputed</strong> means the document does not prove the requirement.</p>
-        </aside>
       </section>
     `;
     document.querySelectorAll("[data-evidence-status]").forEach((button) => {
@@ -3032,7 +3080,7 @@ function statusClassForEvidence(status) {
 
 function renderGrievances() {
   const list = projectItems("grievances").map((item) => `
-    <article class="card">
+    <article class="inbox-item">
       <div class="finding-topline">
         <div>
           <p class="eyebrow">${escapeHtml(item.referenceNumber)} • ${new Date(item.receivedAt).toLocaleString()}</p>
@@ -3050,16 +3098,19 @@ function renderGrievances() {
       </div>
     </article>
   `).join("");
+  const selected = projectItems("grievances")[0];
 
   document.querySelector("#grievances").innerHTML = `
-    <div class="grid two">
+    ${projectRoomHeader("grievances")}
+    ${pageHeader("Grievance Center", "Review cases like an inbox.", "Community cases")}
+    <section class="panel">${filterTabs(["New", "Under review", "High risk", "Resolved", "Confidential"])}</section>
+    <div class="inbox-layout">
       <section class="panel">
         <div class="panel-header">
           <div>
-            <h3>Community Portal</h3>
-            <p>English and Nepali intake with the same three-question flow a field team can use from a phone.</p>
+            <h3>Submit Concern</h3>
+            <p>Keep public intake simple and human.</p>
           </div>
-          <span class="tag">Public intake</span>
         </div>
         <div class="form-grid">
           <div class="field">
@@ -3099,31 +3150,40 @@ function renderGrievances() {
           </div>
         </div>
         <div class="toolbar" style="margin-top:20px">
-          <button class="btn" id="loadNepali" type="button">Load Nepali example</button>
-          <button class="btn primary" id="submitGrievance" type="button"><span class="tool-icon" data-icon="message"></span>Submit grievance</button>
+          <button class="btn" id="loadNepali" type="button">Load example</button>
+          <button class="btn primary" id="submitGrievance" type="button"><span class="tool-icon" data-icon="message"></span>Submit</button>
         </div>
       </section>
 
       <section class="panel">
         <div class="panel-header">
           <div>
-            <h3>AI Routing Preview</h3>
-            <p>New submissions are translated, summarized, classified, mapped to IFC, assigned severity, and given a reference number.</p>
+            <h3>Case Detail</h3>
+            <p>Long text stays here, not in every list item.</p>
           </div>
         </div>
-        <div id="routingPreview" class="empty-state">Submit a grievance to see the routing result.</div>
+        ${selected ? `
+          <div class="case-detail">
+            <div class="split-meta"><span class="tag">${escapeHtml(selected.referenceNumber)}</span><span class="tag">${escapeHtml(selected.linkedStandard)}</span><span class="tag">${escapeHtml(selected.confidentialityLevel)}</span></div>
+            <h3>${escapeHtml(selected.aiSummary)}</h3>
+            ${accordion("Original text", `<p>${escapeHtml(canViewConfidentialGrievance(selected) ? selected.originalText : "Confidential grievance details are restricted for this role.")}</p>`)}
+            ${accordion("AI summary", `<p>${escapeHtml(selected.aiSummary)}</p><p>${escapeHtml(canViewConfidentialGrievance(selected) ? selected.translatedText : "Restricted")}</p>`)}
+            ${accordion("Status history", `<p>Received ${shortDate(selected.receivedAt)}. Current status: ${escapeHtml(selected.status)}.</p>`)}
+          </div>
+        ` : empty("No grievance selected.")}
+        <div id="routingPreview" class="empty-state compact">Submit a new concern to see routing.</div>
       </section>
     </div>
 
-    <section class="panel" style="margin-top:32px">
+    <section class="panel" style="margin-top:24px">
       <div class="panel-header">
         <div>
-          <h3>${escapeHtml(project().name)} Grievances</h3>
-          <p>Developers can update and close records only with resolution evidence. Permanent deletion is intentionally unavailable.</p>
+          <h3>Inbox</h3>
+          <p>Reference, category, severity, status, and age.</p>
         </div>
         <span class="tag">${projectItems("grievances").length} visible records</span>
       </div>
-      <div class="grievance-list">${list || empty("No grievances for this project yet.")}</div>
+      <div class="grievance-list inbox-list">${list || empty("No grievances for this project yet.")}</div>
     </section>
   `;
 
@@ -3268,41 +3328,76 @@ function renderControversyCenter() {
   const node = document.querySelector("#controversies");
   if (!node) return;
   const items = currentProjectVerification(state.controversies);
+  const fallbackItems = items.length ? items : projectItems("findings")
+    .filter((item) => ["Critical", "High"].includes(item.severity))
+    .slice(0, 3)
+    .map((item) => ({
+      standard: item.standard,
+      severity: item.severity,
+      status: "open",
+      report_claim: item.title,
+      human_feedback_summary: item.standard === "PS5" ? "Feedback says compensation is partly unresolved." : "Ground feedback needs confirmation.",
+      recommended_verification: "Community or worker call required.",
+      contradiction_summary: item.title
+    }));
   node.innerHTML = `
     ${projectRoomHeader("controversies")}
-    <div class="panel-header"><div><p class="eyebrow">AI controversy detection</p><h3>Claims that require human verification</h3></div><button class="btn" type="button" data-refresh-verification>Refresh from backend</button></div>
-    <div class="card-grid">
-      ${items.length ? items.map((item) => `
-        <article class="card controversy-card">
-          <div class="finding-topline"><div><p class="eyebrow">${escapeHtml(item.standard || "IFC")} - ${escapeHtml(item.topic || "validation")}</p><h3>${escapeHtml(item.contradiction_summary || "Manual verification required")}</h3></div><span class="severity severity-${severityClass(item.severity || "Medium")}">${escapeHtml(item.severity || "Medium")}</span></div>
-          <p class="muted"><strong>Report claim:</strong> ${escapeHtml(item.report_claim || "")}</p>
-          <p class="muted"><strong>Human feedback:</strong> ${escapeHtml(item.human_feedback_summary || "")}</p>
-          <p><strong>Recommended verification:</strong> ${escapeHtml(item.recommended_verification || "")}</p>
-          <span class="tag">Status: ${escapeHtml(item.status || "open")}</span>
+    ${pageHeader("Controversy Center", "Compare report claims with ground feedback.", "Manual review")}
+    <section class="panel">${filterTabs(["Open", "Under manual review", "Resolved", "Dismissed"])}</section>
+    <section class="comparison-list">
+      ${fallbackItems.length ? fallbackItems.map((item) => `
+        <article class="comparison-card">
+          <header>
+            <div><p class="eyebrow">${escapeHtml(item.standard || "IFC")} contested claim</p><h3>${escapeHtml(item.contradiction_summary || "Manual verification required")}</h3></div>
+            ${statusPill(item.severity || "Medium", severityClass(item.severity || "Medium"))}
+          </header>
+          <div class="comparison-grid">
+            <div><span>Report says</span><p>${escapeHtml(item.report_claim || "Claim pending")}</p></div>
+            <div><span>Ground feedback says</span><p>${escapeHtml(item.human_feedback_summary || "Feedback pending")}</p></div>
+            <div><span>Verification needed</span><p>${escapeHtml(item.recommended_verification || "Manual check required")}</p></div>
+          </div>
+          <footer><span class="tag">Status: ${escapeHtml(item.status || "open")}</span><button class="btn" type="button" data-refresh-verification>Refresh</button></footer>
         </article>
-      `).join("") : emptyState("No controversies have been detected for this project yet. Submit validation feedback or refresh after the backend is seeded.")}
-    </div>
+      `).join("") : emptyState("No controversies detected yet.")}
+    </section>
   `;
-  node.querySelector("[data-refresh-verification]")?.addEventListener("click", () => loadVerificationData());
+  node.querySelectorAll("[data-refresh-verification]").forEach((button) => button.addEventListener("click", () => loadVerificationData()));
 }
 
 function renderManualVerificationDesk() {
   const node = document.querySelector("#manual-verification");
   if (!node) return;
   const tasks = currentProjectVerification(state.manualTasks);
+  const fallbackTasks = tasks.length ? tasks : projectItems("findings").filter((item) => ["Critical", "High"].includes(item.severity)).slice(0, 4).map((item, index) => ({
+    id: item.id,
+    question_to_verify: item.title,
+    verification_method: index % 2 ? "community call" : "document request",
+    due_date: actionForFinding(item)?.dueDate || dueDateFor(item.severity),
+    required_evidence: item.recommendation,
+    assigned_to: ownerFor(item.standard),
+    status: index === 0 ? "Open" : index === 1 ? "In Progress" : "Evidence Requested"
+  }));
+  const columns = ["Open", "In Progress", "Evidence Requested", "Completed", "Unresolved"];
   node.innerHTML = `
     ${projectRoomHeader("manual-verification")}
-    <div class="panel-header"><div><p class="eyebrow">Manual Verification Desk</p><h3>Human checks for contested claims</h3></div><button class="btn" type="button" data-refresh-verification>Refresh from backend</button></div>
-    <div class="card-grid">
-      ${tasks.length ? tasks.map((item) => `
-        <article class="card manual-task-card">
-          <p class="eyebrow">${escapeHtml(item.verification_method || "verification")} - Due ${escapeHtml(item.due_date || "TBD")}</p>
-          <h3>${escapeHtml(item.question_to_verify || "Verify contested claim")}</h3>
-          <p class="muted">${escapeHtml(item.required_evidence || "")}</p>
-          <div class="split-meta"><span class="tag">Assigned: ${escapeHtml(item.assigned_to || "Verification team")}</span><span class="tag">Status: ${escapeHtml(item.status || "open")}</span></div>
-        </article>
-      `).join("") : emptyState("No manual verification tasks yet. They are created automatically when validation answers contradict report claims.")}
-    </div>
+    ${pageHeader("Manual Verification Desk", "Move contested claims through a task workflow.", "Operations")}
+    <div class="toolbar"><button class="btn" type="button" data-refresh-verification>Refresh</button></div>
+    <section class="kanban-board">
+      ${columns.map((column) => `
+        <div class="kanban-column">
+          <h3>${escapeHtml(column)}</h3>
+          ${fallbackTasks.filter((item) => (item.status || "Open").toLowerCase() === column.toLowerCase()).map((item) => `
+            <article class="kanban-card">
+              <strong>${escapeHtml(item.question_to_verify || "Verify contested claim")}</strong>
+              <span>Method: ${escapeHtml(item.verification_method || "site call")}</span>
+              <span>Due: ${escapeHtml(item.due_date || "TBD")}</span>
+              ${accordion("Required evidence", `<p>${escapeHtml(item.required_evidence || "Evidence request pending")}</p>`)}
+              <button class="btn" type="button">Add note</button>
+            </article>
+          `).join("") || empty("No tasks.")}
+        </div>
+      `).join("")}
+    </section>
   `;
   node.querySelector("[data-refresh-verification]")?.addEventListener("click", () => loadVerificationData());
 }
@@ -3311,27 +3406,51 @@ function renderLenderTrustReport() {
   const node = document.querySelector("#trust-report");
   if (!node) return;
   const report = currentProjectVerification(state.lenderTrustReports).at(-1);
+  const metrics = complianceMetrics();
+  const trustScore = report?.final_trust_score ?? 56;
+  const risk = report?.final_risk_level ?? "High";
+  const controversies = currentProjectVerification(state.controversies);
+  const blockers = projectItems("findings").filter((item) => ["Critical", "High"].includes(item.severity) && item.status !== "Closed").slice(0, 3);
   node.innerHTML = `
     ${projectRoomHeader("trust-report")}
-    <div class="panel-header"><div><p class="eyebrow">Lender Trust Report</p><h3>Document claims plus ground-truth verification</h3></div><button class="btn" type="button" data-refresh-verification>Refresh from backend</button></div>
-    ${report ? `
-      <section class="trust-score-panel">
-        <div><span>Final trust score</span><strong>${escapeHtml(report.final_trust_score)}</strong></div>
-        <div><span>Risk level</span><strong>${escapeHtml(report.final_risk_level)}</strong></div>
-        <div><span>Unresolved controversies</span><strong>${escapeHtml(report.unresolved_controversies_count)}</strong></div>
-      </section>
-      <article class="panel">
-        <h3>${escapeHtml(report.funding_recommendation)}</h3>
-        <p class="muted">${escapeHtml(report.summary)}</p>
-        <div class="split-meta">
-          <span class="tag">Community validation: ${escapeHtml(report.community_validation_score ?? "Pending")}</span>
-          <span class="tag">Worker validation: ${escapeHtml(report.worker_validation_score ?? "Pending")}</span>
-          <span class="tag">Manual verification: ${escapeHtml(report.manual_verification_score ?? "Pending")}</span>
-        </div>
-      </article>
-    ` : emptyState("No lender trust report has been generated yet. Refresh after backend startup or submit a validation response.")}
+    ${pageHeader("Lender Trust Report", "Manual verification required before financing.", "Credit risk memo")}
+    <section class="lender-memo">
+      <div>
+        <span>Final Trust Score</span>
+        <strong>${escapeHtml(trustScore)}/100</strong>
+      </div>
+      <div>
+        <span>Risk</span>
+        <strong>${escapeHtml(risk)}</strong>
+      </div>
+      <div>
+        <span>Recommendation</span>
+        <strong>Manual verification required</strong>
+      </div>
+    </section>
+    <section class="metric-grid four compact-metrics">
+      ${metricCard("Document score", readinessText(metrics.readiness))}
+      ${metricCard("Community validation", report?.community_validation_score ?? "Pending")}
+      ${metricCard("Worker validation", report?.worker_validation_score ?? "Pending")}
+      ${metricCard("Manual verification", report?.manual_verification_score ?? "Pending")}
+    </section>
+    <section class="panel">
+      <div class="panel-header compact"><div><h3>Top unresolved controversies</h3><p>Showing top 3 only.</p></div><button class="btn" type="button" data-tab-view="controversies">View all</button></div>
+      ${compactTable(["Standard", "Issue", "Severity", "Status"], blockers.map((item) => `<tr><td>${escapeHtml(item.standard)}</td><td>${escapeHtml(item.title)}</td><td>${statusPill(item.severity, severityClass(item.severity))}</td><td>${escapeHtml(item.status)}</td></tr>`), "No unresolved blockers.")}
+    </section>
+    <section class="panel">
+      <div class="metric-grid four compact-metrics">
+        ${metricCard("Claims extracted", projectItems("evidence").length)}
+        ${metricCard("Feedback received", projectItems("grievances").length + state.validationSubmissions.length)}
+        ${metricCard("Controversies open", controversies.length || blockers.length)}
+        ${metricCard("Manual checks completed", currentProjectVerification(state.manualTasks).filter((item) => item.status === "completed").length)}
+      </div>
+      ${accordion("Why this score?", `<p>${escapeHtml(report?.summary || "PS1, PS5, and PS7 remain unverified.")}</p>`)}
+    </section>
+    <div class="toolbar"><button class="btn" type="button" data-refresh-verification>Refresh</button></div>
   `;
   node.querySelector("[data-refresh-verification]")?.addEventListener("click", () => loadVerificationData());
+  bindProjectRoomControls();
 }
 
 function renderActions() {
