@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>HydroComply Nepal</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Plus+Jakarta+Sans:wght@600;700;800&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <main id="publicHome" class="public-home"></main>
+    <main id="roleSelection" class="role-selection-page" hidden></main>
+    <main id="communityPortal" class="community-portal-page" hidden></main>
+
+    <div id="appShell" class="app-shell" hidden>
+      <aside class="sidebar">
+        <div class="brand-row">
+          <div class="brand-block">
+            <div>
+              <p class="eyebrow">IFC compliance engine</p>
+              <h1>HydroComply Nepal</h1>
+            </div>
+          </div>
+          <button class="icon-btn sidebar-toggle" type="button" aria-label="Collapse sidebar" aria-expanded="true" title="Collapse sidebar">
+            <span class="toggle-expanded" aria-hidden="true">&lt;</span>
+            <span class="toggle-collapsed" aria-hidden="true">&gt;</span>
+          </button>
+        </div>
+
+        <nav class="nav-list" aria-label="Primary"></nav>
+
+        <button class="btn primary nav-cta" data-view="analyst" type="button">Run AI Scan</button>
+
+        <section class="role-switcher" aria-label="Demo role">
+          <label for="roleSelect">Viewing as</label>
+          <select id="roleSelect">
+            <option value="Lender">Lender</option>
+            <option value="Developer">Developer</option>
+            <option value="Consultant">Consultant</option>
+            <option value="Reviewer">Regulator / Reviewer</option>
+            <option value="Community Liaison">Community Liaison</option>
+          </select>
+        </section>
+      </aside>
+
+      <main class="workspace">
+        <header class="topbar">
+          <div>
+            <p class="eyebrow" id="viewEyebrow">Portfolio dashboard</p>
+            <h2 id="viewTitle">Finance-ready hydropower compliance intelligence</h2>
+          </div>
+          <div class="project-picker">
+            <label for="projectSelect">Project</label>
+            <select id="projectSelect"></select>
+          </div>
+        </header>
+
+        <section id="dashboard" class="view active"></section>
+        <section id="analyst" class="view"></section>
+        <section id="matrix" class="view"></section>
+        <section id="evidence" class="view"></section>
+        <section id="grievances" class="view"></section>
+        <section id="actions" class="view"></section>
+        <section id="rules" class="view"></section>
+        <section id="audit" class="view"></section>
+        <section id="reports" class="view"></section>
+      </main>
+    </div>
+
+    <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+    <template id="iconTemplate">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></svg>
+    </template>
+
+    <script src="app.js"></script>
+  </body>
+</html>
