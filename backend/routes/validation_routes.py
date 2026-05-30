@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 from database.connection import get_db
 from database.models import (
     ControversyFlag,
+    AuditLog,
     LenderTrustReport,
     ManualVerificationNote,
     ManualVerificationTask,
@@ -17,7 +18,7 @@ from database.schemas import (
     ValidationSubmissionCreate,
 )
 from routes.project_routes import row_to_dict
-from services.verification_service import (
+from services.controversy_detection_service import (
     build_lender_trust_report,
     detect_controversies,
     make_reference_number,
@@ -100,8 +101,26 @@ def submit_validation_responses(project_id: str, payload: ValidationSubmissionCr
         db.flush()
         responses_with_questions.append((response, question))
 
+    db.add(AuditLog(
+        project_id=project_id,
+        actor="Validation Portal",
+        actor_role="Public respondent",
+        action="Validation submission received",
+        entity_type="validation_submission",
+        entity_id=submission.id,
+        detail=f"Validation response {reference_number} received from {payload.respondent_type}.",
+    ))
     controversies = detect_controversies(db, project_id, responses_with_questions)
     trust_report = build_lender_trust_report(db, project_id)
+    db.add(AuditLog(
+        project_id=project_id,
+        actor="HydroComply trust engine",
+        actor_role="System",
+        action="Lender trust report generated",
+        entity_type="lender_trust_report",
+        entity_id=trust_report.id,
+        detail=f"{trust_report.unresolved_controversies_count} unresolved controversies included.",
+    ))
     db.commit()
 
     return {
@@ -134,6 +153,16 @@ def create_manual_verification_task(
 ):
     task = ManualVerificationTask(project_id=project_id, controversy_id=controversy_id, **payload.dict())
     db.add(task)
+    db.flush()
+    db.add(AuditLog(
+        project_id=project_id,
+        actor="HydroComply trust engine",
+        actor_role="System",
+        action="Manual verification task created",
+        entity_type="manual_verification_task",
+        entity_id=task.id,
+        detail=f"Manual verification task created for controversy {controversy_id}.",
+    ))
     db.commit()
     db.refresh(task)
     return row_to_dict(task)
@@ -158,10 +187,20 @@ def add_manual_verification_note(task_id: str, payload: ManualVerificationNoteCr
 
     note = ManualVerificationNote(task_id=task_id, **payload.dict())
     db.add(note)
-    if payload.decision in {"verified", "partially_verified"}:
+    db.flush()
+    if payload.decision in {"report_claim_verified", "community_feedback_verified", "worker_feedback_verified", "partially_verified"}:
         task.status = "completed"
     elif payload.decision in {"unresolved", "needs_field_visit"}:
         task.status = "unresolved"
+    db.add(AuditLog(
+        project_id=task.project_id,
+        actor=payload.verifier_name,
+        actor_role=payload.verifier_role,
+        action="Manual verification note added",
+        entity_type="manual_verification_note",
+        entity_id=note.id,
+        detail=f"Decision: {payload.decision}.",
+    ))
     db.commit()
     db.refresh(note)
     return row_to_dict(note)
@@ -177,6 +216,15 @@ def get_lender_trust_report(project_id: str, db: Session = Depends(get_db)):
     )
     if not report:
         report = build_lender_trust_report(db, project_id)
+        db.add(AuditLog(
+            project_id=project_id,
+            actor="HydroComply trust engine",
+            actor_role="System",
+            action="Lender trust report generated",
+            entity_type="lender_trust_report",
+            entity_id=report.id,
+            detail=f"{report.unresolved_controversies_count} unresolved controversies included.",
+        ))
         db.commit()
         db.refresh(report)
     return row_to_dict(report)

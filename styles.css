@@ -420,6 +420,32 @@
   }
 }
 
+.score-strip article.insufficient {
+  color: #475569;
+  border-color: #e5e7eb;
+  background: #f8fafc;
+}
+
+.score-strip article em {
+  display: block;
+  margin-top: 4px;
+  color: #64748b;
+  font-size: 0.68rem;
+  font-style: normal;
+  font-weight: 800;
+}
+
+.fallback-banner.caution {
+  color: #92400e;
+  background: #fff7ed;
+  border-color: #fed7aa;
+}
+
+.compliance-finding-card.insufficient {
+  border-color: #e5e7eb;
+  background: #f8fafc;
+}
+
 * {
   box-sizing: border-box;
 }

@@ -321,6 +321,27 @@ def ensure_seed_schema():
             if column_name not in existing_project_columns:
                 connection.execute(text(f"ALTER TABLE projects ADD COLUMN {column_name} {column_type}"))
 
+        analysis_columns = {column["name"] for column in inspector.get_columns("compliance_analyses")}
+        for column_name in ["ps2_score", "ps3_score", "ps4_score", "ps6_score", "ps8_score"]:
+            if column_name not in analysis_columns:
+                connection.execute(text(f"ALTER TABLE compliance_analyses ADD COLUMN {column_name} INTEGER"))
+
+        if "compliance_findings" in inspector.get_table_names():
+            finding_columns = {column["name"] for column in inspector.get_columns("compliance_findings")}
+            for column_name, column_type in {
+                "analysis_status": "VARCHAR(50)",
+                "evidence_coverage": "VARCHAR(50)",
+                "confidence": "INTEGER",
+                "summary": "TEXT",
+            }.items():
+                if column_name not in finding_columns:
+                    connection.execute(text(f"ALTER TABLE compliance_findings ADD COLUMN {column_name} {column_type}"))
+
+        if "report_claims" in inspector.get_table_names():
+            report_claim_columns = {column["name"] for column in inspector.get_columns("report_claims")}
+            if "analysis_id" not in report_claim_columns:
+                connection.execute(text("ALTER TABLE report_claims ADD COLUMN analysis_id VARCHAR(80)"))
+
         snapshot_columns = inspector.get_columns("score_snapshots")
         needs_snapshot_rebuild = any(
             column["name"] in {"ps1_score", "ps5_score", "ps7_score", "overall_score", "risk_level"}

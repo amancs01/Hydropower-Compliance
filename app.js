@@ -149,7 +149,8 @@ const initialState = {
   validationSubmissions: [],
   controversies: [],
   manualTasks: [],
-  lenderTrustReports: []
+  lenderTrustReports: [],
+  reportClaims: []
 };
 
 let state = loadState();
@@ -359,6 +360,7 @@ function loadState() {
     nextState.controversies = parsed.controversies || initialState.controversies;
     nextState.manualTasks = parsed.manualTasks || initialState.manualTasks;
     nextState.lenderTrustReports = parsed.lenderTrustReports || initialState.lenderTrustReports;
+    nextState.reportClaims = parsed.reportClaims || initialState.reportClaims;
     if (!nextState.projects.some((item) => item.id === nextState.selectedProjectId)) {
       nextState.selectedProjectId = initialState.selectedProjectId;
     }
@@ -415,6 +417,10 @@ function fetchLenderTrustReport(projectId) {
   return apiGet(`/api/projects/${encodeURIComponent(projectId)}/lender-trust-report`);
 }
 
+function fetchReportClaims(projectId) {
+  return apiGet(`/api/projects/${encodeURIComponent(projectId)}/report-claims`);
+}
+
 async function addManualTaskNote(taskId, payload) {
   const response = await fetch(`${API_BASE_URL}/api/manual-verification-tasks/${encodeURIComponent(taskId)}/notes`, {
     method: "POST",
@@ -427,10 +433,11 @@ async function addManualTaskNote(taskId, payload) {
 
 async function loadVerificationData(projectId = state.selectedProjectId) {
   try {
-    const [controversies, manualTasks, trustReport] = await Promise.all([
+    const [controversies, manualTasks, trustReport, reportClaims] = await Promise.all([
       fetchControversies(projectId),
       fetchManualTasks(projectId),
-      fetchLenderTrustReport(projectId)
+      fetchLenderTrustReport(projectId),
+      fetchReportClaims(projectId)
     ]);
     state.controversies = [
       ...state.controversies.filter((item) => item.project_id !== projectId && item.projectId !== projectId),
@@ -443,6 +450,10 @@ async function loadVerificationData(projectId = state.selectedProjectId) {
     state.lenderTrustReports = [
       ...state.lenderTrustReports.filter((item) => item.project_id !== projectId && item.projectId !== projectId),
       trustReport
+    ];
+    state.reportClaims = [
+      ...state.reportClaims.filter((item) => item.project_id !== projectId && item.projectId !== projectId),
+      ...reportClaims.map((item) => ({ ...item, project_id: projectId }))
     ];
     saveState();
     render();
@@ -606,13 +617,13 @@ function mapBackendScore(projectItem, scoreHistory = []) {
 
   return {
     PS1: latest.ps1_score ?? 50,
-    PS2: latest.ps2_score ?? 60,
-    PS3: latest.ps3_score ?? 60,
-    PS4: latest.ps4_score ?? 60,
+    PS2: latest.ps2_score ?? null,
+    PS3: latest.ps3_score ?? null,
+    PS4: latest.ps4_score ?? null,
     PS5: latest.ps5_score ?? 50,
-    PS6: latest.ps6_score ?? 60,
+    PS6: latest.ps6_score ?? null,
     PS7: latest.ps7_score ?? 50,
-    PS8: latest.ps8_score ?? 70
+    PS8: latest.ps8_score ?? null
   };
 }
 
@@ -1909,7 +1920,7 @@ function renderLenderDashboard() {
         <div>
           <p class="eyebrow">Investment Risk Review</p>
           <h2>${escapeHtml(project().name)} is ${Number.isFinite(readiness) ? (readiness >= 75 ? "finance-ready" : "not finance-ready") : "baseline pending"}</h2>
-          <p>${Number.isFinite(readiness) ? "Mandatory PS1, PS5, and PS7 evidence remains unverified." : "Report available, AI analysis not yet run. No lender score has been generated."}</p>
+          <p>${Number.isFinite(readiness) ? "Some IFC standards remain unverified or insufficiently evidenced." : "Report available, AI analysis not yet run. No lender score has been generated."}</p>
         </div>
         <div class="readiness-meter"><strong>${readinessText(readiness)}</strong><span>Readiness</span></div>
       </section>
@@ -2546,12 +2557,22 @@ async function runRealAiAnalysis() {
 
   try {
     latestComplianceAnalysis = await analyzeCompliancePdf(selectedAnalyzerFile);
+    state.reportClaims = [
+      ...state.reportClaims.filter((item) => item.project_id !== state.selectedProjectId && item.projectId !== state.selectedProjectId),
+      ...(latestComplianceAnalysis.report_claims || []).map((item) => ({ ...item, project_id: state.selectedProjectId }))
+    ];
+    saveState();
     if (resultNode) resultNode.innerHTML = renderComplianceAnalysisResult(latestComplianceAnalysis);
-    toast(`AI compliance analysis complete: ${latestComplianceAnalysis.scores.overall}/100, ${latestComplianceAnalysis.scores.risk_level} risk.`);
+    toast(`AI compliance analysis complete: ${scoreOrPending(latestComplianceAnalysis.scores.overall)}/100, ${latestComplianceAnalysis.scores.risk_level} risk.`);
   } catch (error) {
     const message = messageForComplianceAnalysisError(error);
     if (error.code === "BACKEND_OFFLINE") {
       latestComplianceAnalysis = localComplianceFallbackResult(selectedAnalyzerFile);
+      state.reportClaims = [
+        ...state.reportClaims.filter((item) => item.project_id !== state.selectedProjectId && item.projectId !== state.selectedProjectId),
+        ...(latestComplianceAnalysis.report_claims || []).map((item) => ({ ...item, project_id: state.selectedProjectId }))
+      ];
+      saveState();
       if (resultNode) resultNode.innerHTML = renderComplianceAnalysisResult(latestComplianceAnalysis, true);
       toast("Backend unavailable. Showing Local demo fallback.");
       return;
@@ -2579,6 +2600,21 @@ function messageForComplianceAnalysisError(error) {
 }
 
 function localComplianceFallbackResult(file) {
+  const insufficient = (standard) => ({
+    standard,
+    score: null,
+    severity: "Low",
+    analysis_status: "insufficient_evidence",
+    evidence_coverage: "insufficient",
+    confidence: 0,
+    title: `Insufficient evidence for ${standard}`,
+    summary: "The uploaded document does not contain enough evidence to score this standard.",
+    missing_requirements: [],
+    partial_compliance: [],
+    risks: [],
+    recommended_actions: [],
+    evidence: []
+  });
   return {
     status: "success",
     analysis_id: "local-demo-fallback",
@@ -2589,48 +2625,114 @@ function localComplianceFallbackResult(file) {
       text_length: document.querySelector("#docText")?.value.length || 0,
       contains_nepali: false
     },
-    scores: { ps1: 80, ps5: 40, ps7: 20, overall: 56, risk_level: "High" },
+    scores: {
+      ps1: 80,
+      ps2: null,
+      ps3: null,
+      ps4: null,
+      ps5: 40,
+      ps6: null,
+      ps7: 20,
+      ps8: null,
+      overall: 47,
+      risk_level: "High",
+      analyzed_count: 3,
+      total_standards: 8,
+      overall_confidence: "low",
+      coverage_note: "3 of 8 standards were analyzed. Remaining standards require additional documents or manual review."
+    },
     summary: "The document contains some environmental and social management information, but important land acquisition, livelihood restoration, and Indigenous Peoples evidence remain weak or missing.",
     findings: [
       {
         standard: "PS1",
         score: 80,
         severity: "Medium",
+        analysis_status: "analyzed",
+        evidence_coverage: "moderate",
+        confidence: 70,
         title: "PS1 mostly addressed but evidence needs strengthening",
+        summary: "Some management-system evidence is present, but operational controls need review.",
         missing_requirements: ["Complete ESMS evidence", "Stakeholder engagement plan", "Operational grievance mechanism"],
         partial_compliance: ["EIA-style assessment is present", "Some consultation evidence appears available"],
         risks: ["One-time assessment may not prove ongoing management"],
         recommended_actions: ["Upload ESMS, SEP, grievance mechanism, monitoring matrix, and corrective action register"],
         evidence: [{ text: "Local demo fallback evidence snippet from the uploaded text.", page: 1 }]
       },
+      insufficient("PS2"),
+      insufficient("PS3"),
+      insufficient("PS4"),
       {
         standard: "PS5",
         score: 40,
         severity: "High",
+        analysis_status: "analyzed",
+        evidence_coverage: "weak",
+        confidence: 65,
         title: "PS5 land and livelihood evidence is weak",
+        summary: "Land evidence is partial and does not prove replacement-cost or livelihood restoration.",
         missing_requirements: ["Replacement-cost methodology", "Resettlement Action Plan", "Livelihood restoration monitoring", "Post-compensation follow-up"],
         partial_compliance: ["Land or compensation is referenced"],
         risks: ["Compensation may not meet IFC PS5 expectations", "Livelihood restoration may be untracked"],
         recommended_actions: ["Upload RAP, affected household list, payment proof, replacement-cost methodology, and livelihood monitoring records"],
         evidence: [{ text: "Local demo fallback evidence snippet from the uploaded text.", page: 1 }]
       },
+      insufficient("PS6"),
       {
         standard: "PS7",
         score: 20,
         severity: "Critical",
+        analysis_status: "analyzed",
+        evidence_coverage: "weak",
+        confidence: 60,
         title: "PS7 Indigenous Peoples evidence is missing",
+        summary: "Potential Indigenous Peoples impacts need applicability screening and verification.",
         missing_requirements: ["PS7 applicability screening", "Indigenous Peoples Plan", "FPIC or consultation evidence where applicable", "Benefit-sharing evidence"],
         partial_compliance: ["Ethnic or local communities may be referenced"],
         risks: ["Potential Indigenous Peoples impacts may be unresolved"],
         recommended_actions: ["Verify PS7 applicability and upload IPP, FPIC/consultation records, benefit-sharing plan, and grievance evidence"],
         evidence: [{ text: "Local demo fallback evidence snippet from the uploaded text.", page: 1 }]
+      },
+      insufficient("PS8")
+    ],
+    report_claims: [
+      {
+        standard: "PS1",
+        topic: "consultation",
+        claim_text: "The report states that public consultation was conducted.",
+        source_excerpt: "Local demo fallback evidence snippet from the uploaded text.",
+        source_page: 1,
+        ai_confidence: 78,
+        verification_status: "document_claim_only"
+      },
+      {
+        standard: "PS1",
+        topic: "grievance mechanism",
+        claim_text: "The report states that a grievance mechanism exists.",
+        source_excerpt: "Local demo fallback evidence snippet from the uploaded text.",
+        source_page: 1,
+        ai_confidence: 72,
+        verification_status: "document_claim_only"
+      },
+      {
+        standard: "PS5",
+        topic: "compensation",
+        claim_text: "The report indicates compensation or land acquisition was addressed.",
+        source_excerpt: "Local demo fallback evidence snippet from the uploaded text.",
+        source_page: 1,
+        ai_confidence: 70,
+        verification_status: "document_claim_only"
       }
     ],
-    raw_model_used: { translation_model: "not_used", compliance_model: "Local demo fallback" }
+    raw_model_used: { translation_model: "not_used", compliance_model: "Local demo fallback" },
+    analysis_source: "local_demo_fallback",
+    note: "Local demo fallback analyzes only selected standards."
   };
 }
 
 function renderComplianceAnalysisResult(result, isLocalFallback = false) {
+  const standardKeys = ["ps1", "ps2", "ps3", "ps4", "ps5", "ps6", "ps7", "ps8"];
+  const findingsByStandard = new Map((result.findings || []).map((item) => [String(item.standard || "").toUpperCase(), item]));
+  const reportClaims = result.report_claims || [];
   return `
     <div class="compliance-result ${isLocalFallback ? "fallback" : ""}">
       ${isLocalFallback ? `<div class="fallback-banner">Local demo fallback. Start the FastAPI backend for real AI analysis.</div>` : ""}
@@ -2643,17 +2745,38 @@ function renderComplianceAnalysisResult(result, isLocalFallback = false) {
             <span class="tag">Text: ${Number(result.document.text_length).toLocaleString()} chars</span>
             <span class="tag">Nepali detected: ${result.document.contains_nepali ? "Yes" : "No"}</span>
             <span class="tag">Model: ${escapeHtml(result.raw_model_used.compliance_model)}</span>
+            <span class="tag">${escapeHtml(result.scores.coverage_note || `${result.scores.analyzed_count || 0} of ${result.scores.total_standards || 8} standards analyzed`)}</span>
           </div>
         </div>
         <div class="compliance-score-card">
-          <strong>${result.scores.overall}/100</strong>
+          <strong>${scoreOrPending(result.scores.overall)}/100</strong>
           <span>${escapeHtml(result.scores.risk_level)} risk</span>
         </div>
       </section>
       <section class="score-strip">
-        <article><span>PS1</span><strong>${result.scores.ps1}</strong></article>
-        <article><span>PS5</span><strong>${result.scores.ps5}</strong></article>
-        <article><span>PS7</span><strong>${result.scores.ps7}</strong></article>
+        ${standardKeys.map((key) => {
+          const score = result.scores[key];
+          const finding = findingsByStandard.get(key.toUpperCase());
+          return `<article class="${score == null ? "insufficient" : ""}"><span>${key.toUpperCase()}</span><strong>${score == null ? "Insufficient" : score}</strong><em>${escapeHtml(finding?.analysis_status || (score == null ? "insufficient_evidence" : "analyzed"))}</em></article>`;
+        }).join("")}
+      </section>
+      ${result.scores.analyzed_count < 8 ? `<div class="fallback-banner caution">Lender caution: Some IFC standards were not scored because the uploaded document did not contain enough evidence.</div>` : ""}
+      <section class="panel report-claims-panel">
+        <div class="panel-header compact">
+          <div>
+            <h3>Report Claims</h3>
+            <p>These claims are extracted from the report. They are not verified until checked against ground feedback or manual verification.</p>
+          </div>
+        </div>
+        ${compactTable(["IFC Standard", "Topic", "Claim", "Page", "Status"], reportClaims.map((claim) => `
+          <tr>
+            <td>${escapeHtml(claim.standard)}</td>
+            <td>${escapeHtml(claim.topic)}</td>
+            <td><strong>${escapeHtml(claim.claim_text)}</strong>${accordion("Source excerpt", `<p>${escapeHtml(claim.source_excerpt || "No excerpt returned.")}</p>`)}</td>
+            <td>${escapeHtml(String(claim.source_page ?? "N/A"))}</td>
+            <td>${statusPill(claim.verification_status || "document_claim_only", "blue")}</td>
+          </tr>
+        `), "No checkable report claims were extracted.")}
       </section>
       <section class="compliance-findings">
         ${result.findings.map(renderComplianceFinding).join("")}
@@ -2663,19 +2786,23 @@ function renderComplianceAnalysisResult(result, isLocalFallback = false) {
 }
 
 function renderComplianceFinding(finding) {
+  const insufficient = finding.analysis_status === "insufficient_evidence" || finding.score == null;
   return `
-    <article class="compliance-finding-card">
+    <article class="compliance-finding-card ${insufficient ? "insufficient" : ""}">
       <div class="finding-topline">
         <div>
-          <p class="eyebrow">${escapeHtml(finding.standard)} - Score ${finding.score}</p>
+          <p class="eyebrow">${escapeHtml(finding.standard)} - ${insufficient ? "Insufficient evidence" : `Score ${finding.score}`}</p>
           <h3>${escapeHtml(finding.title)}</h3>
         </div>
-        <span class="severity severity-${severityClass(finding.severity)}">${escapeHtml(finding.severity)}</span>
+        <span class="severity severity-${insufficient ? "pending" : severityClass(finding.severity)}">${insufficient ? "Insufficient evidence" : escapeHtml(finding.severity)}</span>
       </div>
-      ${listBlock("Missing requirements", finding.missing_requirements)}
-      ${listBlock("Partial compliance", finding.partial_compliance)}
-      ${listBlock("Risks", finding.risks)}
-      ${listBlock("Recommended actions", finding.recommended_actions)}
+      <p class="muted">${escapeHtml(finding.summary || "The uploaded document does not contain enough evidence to score this standard.")}</p>
+      ${insufficient ? "" : `
+        ${listBlock("Missing requirements", finding.missing_requirements)}
+        ${listBlock("Partial compliance", finding.partial_compliance)}
+        ${listBlock("Risks", finding.risks)}
+        ${listBlock("Recommended actions", finding.recommended_actions)}
+      `}
       <div class="evidence-snippets">
         <strong>Evidence snippets</strong>
         ${(finding.evidence || []).map((item) => `<blockquote>${escapeHtml(item.text)} <cite>Page ${item.page}</cite></blockquote>`).join("") || "<p class=\"muted\">No evidence snippets returned.</p>"}
@@ -2879,7 +3006,8 @@ function renderMatrix() {
   const scores = selectedScores();
   const rows = standards.map((standard) => {
     const score = scores?.[standard.code];
-    const status = statusForScore(score);
+    const insufficient = scores && score === null;
+    const status = insufficient ? "Insufficient evidence" : statusForScore(score);
     const standardFindings = projectItems("findings").filter((item) => item.standard === standard.code && item.status !== "Closed");
     const linkedEvidence = projectItems("evidence").filter((item) => item.linkedStandard === standard.code);
     const topGap = standardFindings[0]?.title || "No open blocker";
@@ -2889,8 +3017,8 @@ function renderMatrix() {
     return `
       <tr>
         <td><strong>${standard.code}</strong><span class="muted block">${escapeHtml(standard.name)}</span></td>
-        <td>${scoreOrPending(score)}</td>
-        <td>${statusPill(status, status.toLowerCase())}</td>
+        <td>${insufficient ? "Insufficient evidence" : scoreOrPending(score)}</td>
+        <td>${statusPill(status, insufficient ? "pending" : status.toLowerCase())}</td>
         <td>${escapeHtml(topGap)}</td>
         <td>${escapeHtml(evidenceStatus)}</td>
         <td><button class="btn" type="button" data-tab-view="evidence">View</button></td>
@@ -3445,7 +3573,7 @@ function renderLenderTrustReport() {
         ${metricCard("Controversies open", controversies.length || blockers.length)}
         ${metricCard("Manual checks completed", currentProjectVerification(state.manualTasks).filter((item) => item.status === "completed").length)}
       </div>
-      ${accordion("Why this score?", `<p>${escapeHtml(report?.summary || "PS1, PS5, and PS7 remain unverified.")}</p>`)}
+      ${accordion("Why this score?", `<p>${escapeHtml(report?.summary || "Some IFC standards remain unverified or insufficiently evidenced.")}</p>`)}
     </section>
     <div class="toolbar"><button class="btn" type="button" data-refresh-verification>Refresh</button></div>
   `;

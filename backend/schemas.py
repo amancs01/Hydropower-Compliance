@@ -1,4 +1,4 @@
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Literal, Optional
 
 from pydantic import BaseModel
 
@@ -21,10 +21,24 @@ class EvidenceSnippet(BaseModel):
     page: int
 
 
+class ReportClaimOutput(BaseModel):
+    standard: str
+    topic: str
+    claim_text: str
+    source_excerpt: str = ""
+    source_page: Optional[int] = None
+    ai_confidence: int = 0
+
+
 class ModelFinding(BaseModel):
-    score: int
+    standard: Optional[str] = None
+    score: Optional[int] = None
     severity: str
+    analysis_status: Literal["analyzed", "insufficient_evidence", "not_applicable"] = "analyzed"
+    evidence_coverage: Literal["strong", "moderate", "weak", "insufficient"] = "weak"
+    confidence: int = 0
     title: str
+    summary: str = ""
     missing_requirements: List[str]
     partial_compliance: List[str]
     risks: List[str]
@@ -35,8 +49,16 @@ class ModelFinding(BaseModel):
 class ModelComplianceOutput(BaseModel):
     summary: str
     ps1: ModelFinding
+    ps2: ModelFinding
+    ps3: ModelFinding
+    ps4: ModelFinding
     ps5: ModelFinding
+    ps6: ModelFinding
     ps7: ModelFinding
+    ps8: ModelFinding
+    report_claims: List[ReportClaimOutput] = []
+    analysis_source: Optional[str] = None
+    note: Optional[str] = None
 
 
 class DocumentInfo(BaseModel):
@@ -48,18 +70,31 @@ class DocumentInfo(BaseModel):
 
 
 class ScoreSummary(BaseModel):
-    ps1: int
-    ps5: int
-    ps7: int
-    overall: int
+    ps1: Optional[int] = None
+    ps2: Optional[int] = None
+    ps3: Optional[int] = None
+    ps4: Optional[int] = None
+    ps5: Optional[int] = None
+    ps6: Optional[int] = None
+    ps7: Optional[int] = None
+    ps8: Optional[int] = None
+    overall: Optional[int] = None
     risk_level: str
+    analyzed_count: int = 0
+    total_standards: int = 8
+    overall_confidence: str = "low"
+    coverage_note: str = ""
 
 
 class ComplianceFindingResponse(BaseModel):
     standard: str
-    score: int
+    score: Optional[int] = None
     severity: str
+    analysis_status: str = "analyzed"
+    evidence_coverage: str = "weak"
+    confidence: int = 0
     title: str
+    summary: str = ""
     missing_requirements: List[str]
     partial_compliance: List[str]
     risks: List[str]
@@ -79,6 +114,7 @@ class ComplianceAnalyzeResponse(BaseModel):
     scores: ScoreSummary
     summary: str
     findings: List[ComplianceFindingResponse]
+    report_claims: List[ReportClaimOutput] = []
     raw_model_used: RawModelUsed
 
 

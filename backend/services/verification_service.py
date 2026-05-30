@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 
 from database.models import (
     ControversyFlag,
+    AuditLog,
     LenderTrustReport,
     ManualVerificationTask,
     ReportClaim,
@@ -180,6 +181,24 @@ def detect_controversies(db: Session, project_id: str, responses_with_questions)
         db.add(controversy)
         db.flush()
         create_manual_task(db, controversy)
+        db.add(AuditLog(
+            project_id=project_id,
+            actor="HydroComply trust engine",
+            actor_role="System",
+            action="Controversy created",
+            entity_type="controversy",
+            entity_id=controversy.id,
+            detail=f"{controversy.standard} {topic} marked as contested claim requiring manual verification.",
+        ))
+        db.add(AuditLog(
+            project_id=project_id,
+            actor="HydroComply trust engine",
+            actor_role="System",
+            action="Manual verification task created",
+            entity_type="controversy",
+            entity_id=controversy.id,
+            detail=f"Manual verification task created for {controversy.standard} {topic}.",
+        ))
         created.append(controversy)
 
     return created

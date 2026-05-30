@@ -113,7 +113,7 @@ class ComplianceAnalysis(Base):
     ps6_score = Column(Integer, nullable=True)
     ps7_score = Column(Integer, nullable=True)
     ps8_score = Column(Integer, nullable=True)
-    overall_score = Column(Integer, nullable=False)
+    overall_score = Column(Integer, nullable=True)
     risk_level = Column(String(50), nullable=False)
     summary = Column(Text, nullable=False)
     model_used = Column(String(255), nullable=False)
@@ -132,9 +132,13 @@ class ComplianceFinding(Base):
     project_id = Column(String(80), ForeignKey("projects.id"), nullable=False)
     analysis_id = Column(String(80), ForeignKey("compliance_analyses.id"), nullable=False)
     standard = Column(String(20), nullable=False)
-    score = Column(Integer, nullable=False)
+    score = Column(Integer, nullable=True)
     severity = Column(String(50), nullable=False)
+    analysis_status = Column(String(50), nullable=False, default="analyzed")
+    evidence_coverage = Column(String(50), nullable=False, default="weak")
+    confidence = Column(Integer, nullable=False, default=0)
     title = Column(String(255), nullable=False)
+    summary = Column(Text, nullable=True)
     description = Column(Text, nullable=True)
     missing_requirements_json = Column(Text, nullable=False)
     partial_compliance_json = Column(Text, nullable=False)
@@ -145,6 +149,30 @@ class ComplianceFinding(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
 
     analysis = relationship("ComplianceAnalysis", back_populates="findings")
+
+
+class ComplianceStandardResult(Base):
+    """One model result per IFC Performance Standard for an analysis."""
+
+    __tablename__ = "compliance_standard_results"
+
+    id = Column(String(80), primary_key=True, default=new_id)
+    analysis_id = Column(String(80), ForeignKey("compliance_analyses.id"), nullable=False)
+    project_id = Column(String(80), ForeignKey("projects.id"), nullable=False)
+    standard = Column(String(20), nullable=False)
+    score = Column(Integer, nullable=True)
+    risk_level = Column(String(50), nullable=True)
+    analysis_status = Column(String(50), nullable=False)
+    evidence_coverage = Column(String(50), nullable=False)
+    confidence = Column(Integer, nullable=False, default=0)
+    title = Column(String(255), nullable=False)
+    summary = Column(Text, nullable=True)
+    missing_requirements_json = Column(Text, nullable=False)
+    partial_compliance_json = Column(Text, nullable=False)
+    risks_json = Column(Text, nullable=False)
+    recommended_actions_json = Column(Text, nullable=False)
+    evidence_json = Column(Text, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
 
 
 class EvidenceItem(Base):
@@ -285,6 +313,7 @@ class ReportClaim(Base):
     id = Column(String(80), primary_key=True, default=new_id)
     project_id = Column(String(80), ForeignKey("projects.id"), nullable=False)
     document_id = Column(String(80), ForeignKey("documents.id"), nullable=True)
+    analysis_id = Column(String(80), ForeignKey("compliance_analyses.id"), nullable=True)
     standard = Column(String(20), nullable=False)
     topic = Column(String(255), nullable=False)
     claim_text = Column(Text, nullable=False)
