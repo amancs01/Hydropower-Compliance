@@ -1,7 +1,7 @@
 import json
 import logging
 
-from fastapi import Depends, FastAPI, File, UploadFile
+from fastapi import Depends, FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
@@ -10,7 +10,8 @@ from config import settings
 from database.connection import get_db
 from database.models import AuditLog, ComplianceAnalysis, ComplianceFinding, ComplianceStandardResult, Document, DocumentChunk, IFCRequirement, Project, ReportClaim
 from database.seed import ensure_seed_schema
-from routes import action_routes, audit_routes, evidence_routes, grievance_routes, project_routes, validation_routes
+from routes import action_routes, audit_routes, auth_routes, evidence_routes, grievance_routes, project_routes, validation_routes
+from services.auth_service import require_roles
 from schemas import ComplianceAnalyzeResponse, PdfExtractResponse
 from services.chunk_service import chunk_pages, chunks_to_context, select_relevant_chunks
 from services.compliance_service import IFC_REQUIREMENTS, analyze_with_groq
@@ -25,20 +26,18 @@ from services.translation_service import translate_context_if_needed
 app = FastAPI(title="HydroComply AI Backend", version="0.2.0")
 logger = logging.getLogger(__name__)
 
+if settings.allow_all_origins:
+    logger.warning("Warning: wildcard CORS enabled. Use only for local/demo testing.")
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:5173",
-        "http://127.0.0.1:5173",
-        "http://localhost:3000",
-        "http://127.0.0.1:3000",
-        "*",
-    ],
+    allow_origins=settings.cors_origins(),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
+app.include_router(auth_routes.router)
 app.include_router(project_routes.router)
 app.include_router(evidence_routes.router)
 app.include_router(grievance_routes.router)
@@ -50,6 +49,13 @@ app.include_router(validation_routes.router)
 @app.on_event("startup")
 def startup():
     ensure_seed_schema()
+
+
+@app.exception_handler(HTTPException)
+def http_exception_handler(request, exc: HTTPException):
+    if isinstance(exc.detail, dict) and exc.detail.get("status") == "error":
+        return JSONResponse(status_code=exc.status_code, content=exc.detail)
+    return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})
 
 
 def error_response(error_code: str, message: str, status_code: int = 400, details=None):
@@ -115,7 +121,10 @@ def api_health():
 
 
 @app.post("/api/pdf/extract", response_model=PdfExtractResponse)
-async def extract_pdf(file: UploadFile = File(...)):
+async def extract_pdf(
+    file: UploadFile = File(...),
+    user=Depends(require_roles(["Developer", "Consultant", "Admin"])),
+):
     invalid = validate_pdf_upload(file)
     if invalid:
         return invalid
@@ -147,7 +156,11 @@ async def extract_pdf(file: UploadFile = File(...)):
 
 
 @app.post("/api/compliance/analyze")
-async def analyze_compliance_pdf(file: UploadFile = File(...), db: Session = Depends(get_db)):
+async def analyze_compliance_pdf(
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    user=Depends(require_roles(["Developer", "Consultant", "Admin"])),
+):
     invalid = validate_pdf_upload(file)
     if invalid:
         return invalid
@@ -457,7 +470,11 @@ def report_claim_to_response(claim: ReportClaim):
 
 
 @app.get("/api/projects/{project_id}/report-claims")
-def get_project_report_claims(project_id: str, db: Session = Depends(get_db)):
+def get_project_report_claims(
+    project_id: str,
+    db: Session = Depends(get_db),
+    user=Depends(require_roles(["Developer", "Consultant", "Lender", "Regulator", "Admin"])),
+):
     rows = (
         db.query(ReportClaim)
         .filter(ReportClaim.project_id == project_id)
@@ -468,7 +485,11 @@ def get_project_report_claims(project_id: str, db: Session = Depends(get_db)):
 
 
 @app.get("/api/documents/{document_id}/report-claims")
-def get_document_report_claims(document_id: str, db: Session = Depends(get_db)):
+def get_document_report_claims(
+    document_id: str,
+    db: Session = Depends(get_db),
+    user=Depends(require_roles(["Developer", "Consultant", "Lender", "Regulator", "Admin"])),
+):
     rows = (
         db.query(ReportClaim)
         .filter(ReportClaim.document_id == document_id)

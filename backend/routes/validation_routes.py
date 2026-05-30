@@ -23,6 +23,7 @@ from services.controversy_detection_service import (
     detect_controversies,
     make_reference_number,
 )
+from services.auth_service import require_roles
 
 
 router = APIRouter(prefix="/api", tags=["validation"])
@@ -134,7 +135,11 @@ def submit_validation_responses(project_id: str, payload: ValidationSubmissionCr
 
 
 @router.get("/projects/{project_id}/controversies")
-def get_project_controversies(project_id: str, db: Session = Depends(get_db)):
+def get_project_controversies(
+    project_id: str,
+    db: Session = Depends(get_db),
+    user=Depends(require_roles(["Developer", "Consultant", "Lender", "Regulator", "Community Liaison", "Admin"])),
+):
     rows = (
         db.query(ControversyFlag)
         .filter(ControversyFlag.project_id == project_id)
@@ -150,6 +155,7 @@ def create_manual_verification_task(
     controversy_id: str,
     payload: ManualVerificationTaskCreate,
     db: Session = Depends(get_db),
+    user=Depends(require_roles(["Consultant", "Community Liaison", "Admin"])),
 ):
     task = ManualVerificationTask(project_id=project_id, controversy_id=controversy_id, **payload.dict())
     db.add(task)
@@ -169,7 +175,11 @@ def create_manual_verification_task(
 
 
 @router.get("/projects/{project_id}/manual-verification-tasks")
-def get_manual_verification_tasks(project_id: str, db: Session = Depends(get_db)):
+def get_manual_verification_tasks(
+    project_id: str,
+    db: Session = Depends(get_db),
+    user=Depends(require_roles(["Consultant", "Lender", "Regulator", "Community Liaison", "Admin"])),
+):
     rows = (
         db.query(ManualVerificationTask)
         .filter(ManualVerificationTask.project_id == project_id)
@@ -180,7 +190,12 @@ def get_manual_verification_tasks(project_id: str, db: Session = Depends(get_db)
 
 
 @router.post("/manual-verification-tasks/{task_id}/notes")
-def add_manual_verification_note(task_id: str, payload: ManualVerificationNoteCreate, db: Session = Depends(get_db)):
+def add_manual_verification_note(
+    task_id: str,
+    payload: ManualVerificationNoteCreate,
+    db: Session = Depends(get_db),
+    user=Depends(require_roles(["Consultant", "Community Liaison", "Admin"])),
+):
     task = db.query(ManualVerificationTask).filter(ManualVerificationTask.id == task_id).first()
     if not task:
         return {"status": "error", "error_code": "NOT_FOUND", "message": "Manual verification task not found."}
@@ -207,7 +222,11 @@ def add_manual_verification_note(task_id: str, payload: ManualVerificationNoteCr
 
 
 @router.get("/projects/{project_id}/lender-trust-report")
-def get_lender_trust_report(project_id: str, db: Session = Depends(get_db)):
+def get_lender_trust_report(
+    project_id: str,
+    db: Session = Depends(get_db),
+    user=Depends(require_roles(["Lender", "Consultant", "Regulator", "Admin"])),
+):
     report = (
         db.query(LenderTrustReport)
         .filter(LenderTrustReport.project_id == project_id)

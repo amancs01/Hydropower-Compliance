@@ -376,8 +376,50 @@ function saveState() {
 
 const API_BASE_URL = "http://127.0.0.1:8000";
 
+function backendRole(role = state.role) {
+  return {
+    "Lender / Investor": "Lender",
+    "Regulator / Reviewer": "Regulator",
+    "Community Member": "Community User"
+  }[role] || role;
+}
+
+function authSession() {
+  try {
+    return JSON.parse(localStorage.getItem("hydrocomply-auth") || "null");
+  } catch {
+    return null;
+  }
+}
+
+function authHeaders(extra = {}) {
+  const session = authSession();
+  return session?.access_token
+    ? { ...extra, Authorization: `Bearer ${session.access_token}` }
+    : extra;
+}
+
+async function demoLogin(role = state.role) {
+  const response = await fetch(`${API_BASE_URL}/api/auth/demo-login`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ role: backendRole(role) })
+  });
+  if (!response.ok) throw new Error("Demo login failed.");
+  const session = await response.json();
+  localStorage.setItem("hydrocomply-auth", JSON.stringify(session));
+  return session;
+}
+
+async function ensureDemoLogin(role = state.role) {
+  const session = authSession();
+  if (session?.access_token && session.role === backendRole(role)) return session;
+  return demoLogin(role);
+}
+
 async function apiGet(path) {
-  const response = await fetch(`${API_BASE_URL}${path}`);
+  const response = await fetch(`${API_BASE_URL}${path}`, { headers: authHeaders() });
+  if (response.status === 403) throw new Error("This action is not available for your role.");
   if (!response.ok) throw new Error(`Backend request failed: ${path}`);
   return response.json();
 }
@@ -424,7 +466,7 @@ function fetchReportClaims(projectId) {
 async function addManualTaskNote(taskId, payload) {
   const response = await fetch(`${API_BASE_URL}/api/manual-verification-tasks/${encodeURIComponent(taskId)}/notes`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: authHeaders({ "Content-Type": "application/json" }),
     body: JSON.stringify(payload)
   });
   if (!response.ok) throw new Error("Manual verification note failed.");
@@ -433,6 +475,7 @@ async function addManualTaskNote(taskId, payload) {
 
 async function loadVerificationData(projectId = state.selectedProjectId) {
   try {
+    await ensureDemoLogin(state.role);
     const [controversies, manualTasks, trustReport, reportClaims] = await Promise.all([
       fetchControversies(projectId),
       fetchManualTasks(projectId),
@@ -878,6 +921,7 @@ function setupChrome() {
   roleSelect.addEventListener("change", (event) => {
     state.role = event.target.value;
     saveState();
+    ensureDemoLogin(state.role).catch(() => toast("Backend unavailable. Local demo fallback remains available."));
     currentView = "dashboard";
     renderPortalShell(roleKey());
     render();
@@ -1181,6 +1225,7 @@ function renderRoleSelection() {
     card.addEventListener("click", () => {
       state.role = card.dataset.roleChoice;
       saveState();
+      ensureDemoLogin(state.role).catch(() => toast("Backend unavailable. Local demo fallback remains available."));
       if (card.dataset.entry === "community") navigate("community");
       else navigate("portal", card.dataset.entry);
     });
@@ -1515,11 +1560,13 @@ function handlePublicRoute(route) {
   if (route === "lender") {
     state.role = "Lender / Investor";
     saveState();
+    ensureDemoLogin(state.role).catch(() => toast("Backend unavailable. Local demo fallback remains available."));
     return navigate("portal", "dashboard");
   }
   if (route === "developer") {
     state.role = "Developer";
     saveState();
+    ensureDemoLogin(state.role).catch(() => toast("Backend unavailable. Local demo fallback remains available."));
     return navigate("portal", "analyst");
   }
 }
@@ -2247,6 +2294,8 @@ function renderAnalyst() {
   const actions = projectItems("actions");
   const textLength = document.querySelector("#docText")?.value?.length || 0;
   const scanScores = latestComplianceAnalysis?.scores || { overall: average(selectedScores()), ps1: selectedScores()?.PS1, ps5: selectedScores()?.PS5, ps7: selectedScores()?.PS7, risk_level: statusForScore(average(selectedScores())) };
+  const scanClaims = latestComplianceAnalysis?.report_claims || currentProjectVerification(state.reportClaims);
+  const standardsAnalyzed = latestComplianceAnalysis?.scores?.analyzed_count ?? Object.values(selectedScores() || {}).filter(Number.isFinite).length;
   document.querySelector("#analyst").innerHTML = `
     ${projectRoomHeader("analyst")}
     ${pageHeader("AI Document Scan", "Upload a report and detect IFC gaps.", "Workflow")}
@@ -2308,7 +2357,7 @@ function renderAnalyst() {
             <div><h3>Run Analysis</h3><p>Extract claims, map evidence, check gaps, and create actions.</p></div>
           </div>
           <div class="processing-steps clean">
-            ${["Extracting text", "Mapping evidence", "Checking IFC gaps", "Creating actions"].map((step) => `<span>${step}</span>`).join("")}
+            ${["Extracting text", "Mapping IFC evidence", "Detecting gaps", "Extracting report claims", "Creating actions"].map((step) => `<span>${step}</span>`).join("")}
           </div>
           <div class="toolbar">
             <button class="btn primary" id="runAnalysis" type="button"><span class="tool-icon" data-icon="play"></span>Run AI Scan</button>
@@ -2326,13 +2375,17 @@ function renderAnalyst() {
           </div>
           <div class="metric-grid four compact-metrics">
             ${metricCard("Overall risk", scanScores.risk_level || statusForScore(scanScores.overall), statusTone(scanScores.risk_level || ""))}
-            ${metricCard("PS1 score", scoreOrPending(scanScores.ps1 ?? scanScores.PS1))}
-            ${metricCard("PS5 score", scoreOrPending(scanScores.ps5 ?? scanScores.PS5))}
-            ${metricCard("PS7 score", scoreOrPending(scanScores.ps7 ?? scanScores.PS7))}
+            ${metricCard("Standards analyzed", `${standardsAnalyzed}/8`)}
+            ${metricCard("Open critical gaps", findings.filter((item) => item.severity === "Critical").length)}
+            ${metricCard("Report claims", scanClaims.length)}
           </div>
           <div class="result-tabs">
             <input checked id="scanTabSummary" name="scanTabs" type="radio" />
             <label for="scanTabSummary">Summary</label>
+            <input id="scanTabStandards" name="scanTabs" type="radio" />
+            <label for="scanTabStandards">Standards</label>
+            <input id="scanTabClaims" name="scanTabs" type="radio" />
+            <label for="scanTabClaims">Report Claims</label>
             <input id="scanTabFindings" name="scanTabs" type="radio" />
             <label for="scanTabFindings">Findings</label>
             <input id="scanTabEvidence" name="scanTabs" type="radio" />
@@ -2343,6 +2396,13 @@ function renderAnalyst() {
             <label for="scanTabRaw">Raw output</label>
             <section class="tab-panel summary-panel">
               <p>${findings.length ? `${findings.length} AI findings and ${actions.length} actions are linked to this project.` : "Run a scan to generate the first compliance analysis."}</p>
+            </section>
+            <section class="tab-panel standards-panel">
+              ${compactTable(["Standard", "Score", "Status"], ["ps1","ps2","ps3","ps4","ps5","ps6","ps7","ps8"].map((key) => `<tr><td>${key.toUpperCase()}</td><td>${scanScores[key] == null ? "Insufficient evidence" : scanScores[key]}</td><td>${statusPill(scanScores[key] == null ? "Insufficient evidence" : statusForScore(scanScores[key]), scanScores[key] == null ? "pending" : statusForScore(scanScores[key]).toLowerCase())}</td></tr>`), "No standard results yet.")}
+            </section>
+            <section class="tab-panel claims-panel">
+              <p class="muted">Report claims are not verified until checked against ground feedback or manual verification.</p>
+              ${compactTable(["IFC Standard", "Topic", "Claim", "Page", "Status"], scanClaims.map((claim) => `<tr><td>${escapeHtml(claim.standard)}</td><td>${escapeHtml(claim.topic)}</td><td><strong>${escapeHtml(claim.claim_text)}</strong>${accordion("Source excerpt", `<p>${escapeHtml(claim.source_excerpt || "No excerpt available.")}</p>`)}</td><td>${escapeHtml(String(claim.source_page ?? "N/A"))}</td><td>${statusPill(claim.verification_status || "document_claim_only", "blue")}</td></tr>`), "No report claims extracted yet.")}
             </section>
             <section class="tab-panel findings-panel">
               <div class="analysis-output">${findings.map(renderComplianceFindingFromState).join("") || empty("No findings yet.")}</div>
@@ -2448,6 +2508,7 @@ function renderAnalyst() {
 }
 
 async function extractPdfTextFromBackend(file) {
+  await ensureDemoLogin(state.role);
   const formData = new FormData();
   formData.append("file", file);
 
@@ -2455,7 +2516,8 @@ async function extractPdfTextFromBackend(file) {
   try {
     response = await fetch("http://127.0.0.1:8000/api/pdf/extract", {
       method: "POST",
-      body: formData
+      body: formData,
+      headers: authHeaders()
     });
   } catch (error) {
     error.code = "BACKEND_OFFLINE";
@@ -2513,6 +2575,7 @@ function messageForPdfUploadError(error, file, isPdf) {
 }
 
 async function analyzeCompliancePdf(file) {
+  await ensureDemoLogin(state.role);
   const formData = new FormData();
   formData.append("file", file);
 
@@ -2520,7 +2583,8 @@ async function analyzeCompliancePdf(file) {
   try {
     response = await fetch("http://127.0.0.1:8000/api/compliance/analyze", {
       method: "POST",
-      body: formData
+      body: formData,
+      headers: authHeaders()
     });
   } catch (error) {
     error.code = "BACKEND_OFFLINE";
@@ -2531,6 +2595,7 @@ async function analyzeCompliancePdf(file) {
   if (!response.ok || payload?.status === "error") {
     const error = new Error(payload?.message || "Compliance analysis failed.");
     error.code = payload?.error_code || "COMPLIANCE_ANALYSIS_FAILED";
+    if (response.status === 403) error.code = "FORBIDDEN";
     error.payload = payload;
     throw error;
   }
@@ -2595,6 +2660,12 @@ function messageForComplianceAnalysisError(error) {
   }
   if (error.code === "GROQ_API_ERROR") {
     return "Groq analysis failed. Check the backend logs and GROQ_API_KEY.";
+  }
+  if (error.code === "FORBIDDEN") {
+    return "This action is not available for your role.";
+  }
+  if (error.message?.includes("role") || error.message?.includes("FORBIDDEN")) {
+    return "This action is not available for your role.";
   }
   return error.message || "Compliance analysis failed.";
 }

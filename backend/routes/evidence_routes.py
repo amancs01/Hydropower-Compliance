@@ -6,6 +6,7 @@ from database.models import EvidenceItem
 from database.schemas import EvidenceCreate
 from routes.project_routes import row_to_dict
 from services.audit_service import add_audit_log
+from services.auth_service import require_roles
 
 
 router = APIRouter(prefix="/api/projects", tags=["evidence"])
@@ -18,7 +19,12 @@ def get_project_evidence(project_id: str, db: Session = Depends(get_db)):
 
 
 @router.post("/{project_id}/evidence")
-def create_project_evidence(project_id: str, payload: EvidenceCreate, db: Session = Depends(get_db)):
+def create_project_evidence(
+    project_id: str,
+    payload: EvidenceCreate,
+    db: Session = Depends(get_db),
+    user=Depends(require_roles(["Developer", "Consultant", "Admin"])),
+):
     evidence = EvidenceItem(project_id=project_id, **payload.dict())
     db.add(evidence)
     db.flush()

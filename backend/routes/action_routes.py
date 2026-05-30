@@ -6,6 +6,7 @@ from database.models import Action
 from database.schemas import ActionCreate
 from routes.project_routes import row_to_dict
 from services.audit_service import add_audit_log
+from services.auth_service import require_roles
 
 
 router = APIRouter(prefix="/api/projects", tags=["actions"])
@@ -18,7 +19,12 @@ def get_project_actions(project_id: str, db: Session = Depends(get_db)):
 
 
 @router.post("/{project_id}/actions")
-def create_project_action(project_id: str, payload: ActionCreate, db: Session = Depends(get_db)):
+def create_project_action(
+    project_id: str,
+    payload: ActionCreate,
+    db: Session = Depends(get_db),
+    user=Depends(require_roles(["Developer", "Community Liaison", "Admin"])),
+):
     action = Action(project_id=project_id, **payload.dict())
     db.add(action)
     db.flush()

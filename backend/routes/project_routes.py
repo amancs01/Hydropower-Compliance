@@ -25,6 +25,7 @@ from database.schemas import (
     VerificationReviewCreate,
 )
 from services.audit_service import add_audit_log
+from services.auth_service import require_roles
 
 
 router = APIRouter(prefix="/api/projects", tags=["projects"])
@@ -54,7 +55,11 @@ def list_projects(db: Session = Depends(get_db)):
 
 
 @router.post("")
-def create_project(payload: ProjectCreate, db: Session = Depends(get_db)):
+def create_project(
+    payload: ProjectCreate,
+    db: Session = Depends(get_db),
+    user=Depends(require_roles(["Developer", "Admin"])),
+):
     project = Project(**payload.dict())
     db.add(project)
     db.flush()
@@ -88,7 +93,12 @@ def get_project_baseline(project_id: str, db: Session = Depends(get_db)):
 
 
 @router.post("/{project_id}/baseline")
-def create_project_baseline(project_id: str, payload: BaselineCreate, db: Session = Depends(get_db)):
+def create_project_baseline(
+    project_id: str,
+    payload: BaselineCreate,
+    db: Session = Depends(get_db),
+    user=Depends(require_roles(["Developer", "Admin"])),
+):
     baseline = ProjectBaseline(project_id=project_id, **payload.dict())
     db.add(baseline)
     db.flush()
@@ -104,7 +114,12 @@ def get_project_findings(project_id: str, db: Session = Depends(get_db)):
 
 
 @router.post("/{project_id}/findings")
-def create_project_finding(project_id: str, payload: FindingCreate, db: Session = Depends(get_db)):
+def create_project_finding(
+    project_id: str,
+    payload: FindingCreate,
+    db: Session = Depends(get_db),
+    user=Depends(require_roles(["Developer", "Consultant", "Admin"])),
+):
     finding = ComplianceFinding(project_id=project_id, **payload.dict())
     db.add(finding)
     db.flush()
@@ -120,7 +135,12 @@ def get_project_score_history(project_id: str, db: Session = Depends(get_db)):
 
 
 @router.post("/{project_id}/score-snapshots")
-def create_score_snapshot(project_id: str, payload: ScoreSnapshotCreate, db: Session = Depends(get_db)):
+def create_score_snapshot(
+    project_id: str,
+    payload: ScoreSnapshotCreate,
+    db: Session = Depends(get_db),
+    user=Depends(require_roles(["Consultant", "Admin"])),
+):
     snapshot = ScoreSnapshot(project_id=project_id, **payload.dict())
     db.add(snapshot)
     db.flush()
@@ -130,7 +150,12 @@ def create_score_snapshot(project_id: str, payload: ScoreSnapshotCreate, db: Ses
 
 
 @router.post("/{project_id}/verification-reviews")
-def create_verification_review(project_id: str, payload: VerificationReviewCreate, db: Session = Depends(get_db)):
+def create_verification_review(
+    project_id: str,
+    payload: VerificationReviewCreate,
+    db: Session = Depends(get_db),
+    user=Depends(require_roles(["Consultant", "Lender", "Admin"])),
+):
     review = VerificationReview(project_id=project_id, **payload.dict())
     db.add(review)
     db.flush()

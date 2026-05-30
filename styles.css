@@ -195,7 +195,7 @@
 
 .result-tabs {
   display: grid;
-  grid-template-columns: repeat(5, auto) 1fr;
+  grid-template-columns: repeat(7, auto) 1fr;
   gap: 8px;
   align-items: start;
 }
@@ -228,6 +228,8 @@
 }
 
 #scanTabSummary:checked ~ label[for="scanTabSummary"],
+#scanTabStandards:checked ~ label[for="scanTabStandards"],
+#scanTabClaims:checked ~ label[for="scanTabClaims"],
 #scanTabFindings:checked ~ label[for="scanTabFindings"],
 #scanTabEvidence:checked ~ label[for="scanTabEvidence"],
 #scanTabActions:checked ~ label[for="scanTabActions"],
@@ -238,6 +240,8 @@
 }
 
 #scanTabSummary:checked ~ .summary-panel,
+#scanTabStandards:checked ~ .standards-panel,
+#scanTabClaims:checked ~ .claims-panel,
 #scanTabFindings:checked ~ .findings-panel,
 #scanTabEvidence:checked ~ .evidence-panel,
 #scanTabActions:checked ~ .actions-panel,

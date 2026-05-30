@@ -1,6 +1,6 @@
 # HydroComply Nepal
 
-AI-powered IFC compliance review tool for hydropower projects in Nepal. Upload an Environmental and Social Impact Assessment (EIA) or similar document and get an instant compliance analysis against IFC Performance Standards PS1, PS5, and PS7.
+AI-powered IFC compliance and trust-verification tool for hydropower projects in Nepal. Upload EIA, IEE, ESMP, RAP, biodiversity, or grievance documents, analyze IFC PS1-PS8, extract report claims, compare them with community/worker feedback, and generate lender-facing trust reports.
 
 ---
 
@@ -135,3 +135,64 @@ http://127.0.0.1:8000/docs
 - The `.env` file contains your secret API key — never share it or commit it to GitHub.
 - The `hydrocomply.db` database file is generated locally and should not be committed to GitHub.
 - Re-run `python -m database.seed` any time you want to reset the database to its original demo state.
+
+---
+
+## Local CORS and Demo Auth
+
+Recommended `.env` settings for local demo:
+
+```env
+GROQ_API_KEY=
+DEMO_JWT_SECRET=change-this-in-production
+ALLOW_ALL_ORIGINS=false
+ALLOWED_ORIGINS=http://localhost:5173,http://127.0.0.1:5173,http://localhost:3000,http://127.0.0.1:3000,http://localhost:4173,http://127.0.0.1:4173
+```
+
+To use a deployed frontend later, add its URL to `ALLOWED_ORIGINS`, separated by commas. Only use `ALLOW_ALL_ORIGINS=true` for local/demo testing.
+
+HydroComply uses simple demo authentication for role-based API access. This is not production-grade identity management.
+
+Demo login:
+
+```http
+POST /api/auth/demo-login
+```
+
+Example body:
+
+```json
+{ "role": "Developer" }
+```
+
+The backend returns a 12-hour bearer token. The frontend stores it in `localStorage` and sends:
+
+```http
+Authorization: Bearer <token>
+```
+
+Public endpoints:
+
+- `GET /health`
+- `GET /api/health`
+- validation screening/questions
+- validation response submission
+- public grievance submission
+
+Protected examples:
+
+- document extraction and AI analysis: `Developer`, `Consultant`, `Admin`
+- audit logs: `Lender`, `Consultant`, `Regulator`, `Admin`
+- lender trust report: `Lender`, `Consultant`, `Regulator`, `Admin`
+- manual verification notes: `Consultant`, `Community Liaison`, `Admin`
+- project creation/editing: `Developer`, `Admin`
+
+To test role restrictions, log in as `Lender` and try document analysis. The backend should return:
+
+```json
+{
+  "status": "error",
+  "error_code": "FORBIDDEN",
+  "message": "You do not have permission to perform this action."
+}
+```
