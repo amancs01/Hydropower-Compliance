@@ -1,5 +1,6 @@
 
 # Python environment - machine specific, never share
+backend/.ven/
 backend/.venv/
 backend/__pycache__/
 backend/**/__pycache__/

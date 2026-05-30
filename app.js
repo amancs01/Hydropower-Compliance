@@ -992,57 +992,79 @@ function renderLandingPage() {
           <button class="btn link" type="button" data-route="community">Submit Community Concern</button>
         </div>
       </div>
-      <div class="hero-ai-pipeline" aria-label="AI Compliance Pipeline visual">
-        <span class="pipeline-connector connector-doc-engine"></span>
-        <span class="pipeline-connector connector-engine-findings"></span>
-        <article class="pipeline-card pipeline-document">
-          <div class="pipeline-card-top">
-            <span class="pipeline-icon">PDF</span>
-            <span class="pipeline-status">Extracted</span>
+      <div class="hero-ai-pipeline trust-engine" aria-label="HydroComply Trust Verification Pipeline visual">
+        <article class="trust-engine-card">
+          <header class="trust-engine-header">
+            <div>
+              <p>HydroComply Trust Engine</p>
+              <strong>Middle Tamor HPP</strong>
+            </div>
+            <span>Live verification</span>
+          </header>
+
+          <div class="trust-flow" aria-hidden="true">
+            <span></span><span></span><span></span><span></span>
           </div>
-          <h3>Middle Tamor EIA.pdf</h3>
-          <p>216 pages &bull; Extracted text</p>
-          <div class="pipeline-tags">
-            <span>EIA</span>
-            <span>Land</span>
-            <span>Biodiversity</span>
-            <span>Grievance log</span>
-          </div>
+
+          <section class="trust-step trust-step-claims">
+            <span class="trust-step-index">01</span>
+            <h3>Document Claims</h3>
+            <p>EIA uploaded &bull; 216 pages</p>
+            <div class="trust-tags">
+              <span>PS1 claims extracted</span>
+              <span>PS5 claims extracted</span>
+              <span>PS7 claims extracted</span>
+            </div>
+          </section>
+
+          <section class="trust-step trust-step-feedback">
+            <span class="trust-step-index">02</span>
+            <h3>Ground Feedback</h3>
+            <p>42 community responses &bull; 18 worker responses</p>
+            <div class="trust-tags">
+              <span>Consultation</span>
+              <span>Compensation</span>
+              <span>Worker safety</span>
+            </div>
+          </section>
+
+          <section class="trust-step trust-step-controversy">
+            <span class="trust-step-index">03</span>
+            <h3>Controversy Check</h3>
+            <p>3 contested claims found</p>
+            <strong class="trust-badge warning">Manual verification required</strong>
+          </section>
+
+          <section class="trust-step trust-step-manual">
+            <span class="trust-step-index">04</span>
+            <h3>Manual Verification</h3>
+            <p>Controversies reviewed before lender release</p>
+            <strong class="trust-badge processing">Evidence review open</strong>
+          </section>
+
+          <section class="trust-step trust-step-report">
+            <span class="trust-step-index">05</span>
+            <h3>Lender Trust Report</h3>
+            <p>Final Trust: 56/100</p>
+            <strong class="trust-badge risk">High Risk</strong>
+          </section>
         </article>
 
-        <article class="pipeline-card pipeline-engine">
-          <div class="engine-orb" aria-hidden="true"></div>
-          <div class="scan-line" aria-hidden="true"></div>
-          <p class="pipeline-eyebrow">AI processing</p>
-          <h3>AI Compliance Engine</h3>
-          <p>Mapping evidence to IFC PS1-PS8</p>
-          <div class="pipeline-steps">
-            <span>Extracting evidence</span>
-            <span>Detecting gaps</span>
-            <span>Checking verification status</span>
-          </div>
+        <article class="trust-mini-card mini-ps5">
+          <strong>PS5 Contested Claim</strong>
+          <p>Report: "Compensation paid fairly"</p>
+          <span>Feedback: "Partly / No"</span>
         </article>
-
-        <section class="pipeline-findings" aria-label="IFC risk findings">
-          <article class="finding-chip critical">
-            <span>PS1 Critical</span>
-            <strong>ESMS not found</strong>
-          </article>
-          <article class="finding-chip high">
-            <span>PS5 High Risk</span>
-            <strong>Replacement-cost unclear</strong>
-          </article>
-          <article class="finding-chip critical">
-            <span>PS7 Critical</span>
-            <strong>IPP / FPIC evidence missing</strong>
-          </article>
-        </section>
-
-        <div class="pipeline-action-strip">
-          <strong>3 actions created</strong>
-          <span>2 evidence items pending verification</span>
-          <em>Risk: High</em>
-        </div>
+        <article class="trust-mini-card mini-ps1">
+          <strong>PS1 Misalignment</strong>
+          <p>Report: "Consultation completed"</p>
+          <span>Feedback: "Not invited"</span>
+        </article>
+        <article class="trust-mini-card mini-manual">
+          <strong>Manual Verification</strong>
+          <p>Site call required</p>
+          <span>Evidence request pending</span>
+        </article>
       </div>
     </section>
 
