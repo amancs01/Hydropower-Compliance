@@ -413,6 +413,8 @@ function setupChrome() {
   document.querySelector(".nav-cta").addEventListener("click", () => {
     navigate("portal", "analyst");
   });
+  document.querySelector("#backHomeBtn")?.addEventListener("click", () => navigate("publicHome"));
+  document.querySelector("#switchRoleBtn")?.addEventListener("click", () => navigate("roleSelect"));
 
   installIcons();
 }
@@ -448,9 +450,15 @@ function render() {
   renderRules();
   renderAudit();
   renderReports();
+  updateTopbarContext();
   installIcons();
   animateMagicCounters();
   observeResultCards();
+}
+
+function updateTopbarContext() {
+  const roleBadge = document.querySelector("#roleBadge");
+  if (roleBadge) roleBadge.textContent = state.role;
 }
 
 function renderLandingPage() {
@@ -458,80 +466,129 @@ function renderLandingPage() {
   const unresolvedGrievances = state.grievances.filter((item) => !["Closed", "Verified"].includes(item.status)).length;
   document.querySelector("#publicHome").innerHTML = `
     <header class="public-nav">
-      <div>
-        <p class="eyebrow">HydroComply Nepal</p>
-        <strong>IFC compliance intelligence</strong>
+      <div class="public-brand">
+        <span class="brand-mark">HCN</span>
+        <div>
+          <strong>HydroComply Nepal</strong>
+          <small>IFC compliance intelligence</small>
+        </div>
       </div>
+      <nav class="public-links" aria-label="Public navigation">
+        <a href="#product">Product</a>
+        <a href="#portals">Portals</a>
+        <a href="#ai-analysis">AI Analysis</a>
+        <a href="#community">Community</a>
+        <a href="#demo">Demo</a>
+      </nav>
       <div class="public-nav-actions">
-        <button class="btn" type="button" data-route="roles">Choose Portal</button>
-        <button class="btn primary" type="button" data-route="developer">Analyze a Project</button>
+        <button class="btn" type="button" data-route="community">Submit Concern</button>
+        <button class="btn primary" type="button" data-route="roles">Open Demo</button>
       </div>
     </header>
 
-    <section class="public-hero">
+    <section id="product" class="public-hero">
       <div class="hero-copy">
-        <p class="eyebrow">Nepal hydropower compliance platform</p>
-        <h2>AI-powered IFC compliance intelligence for Nepal hydropower.</h2>
-        <p>Upload EIA, IEE, RAP, ESMP, monitoring reports, and grievances. HydroComply Nepal reads them, maps evidence to IFC Performance Standards PS1-PS8, detects gaps, and turns risks into accountable actions.</p>
+        <p class="eyebrow">Enterprise infrastructure compliance platform</p>
+        <h2>AI compliance intelligence for hydropower projects.</h2>
+        <p>HydroComply Nepal reads EIA, IEE, RAP, ESMP, monitoring reports, and grievances, maps evidence to IFC Performance Standards PS1-PS8, detects financing risks, and turns gaps into accountable actions.</p>
         <div class="hero-actions">
-          <button class="btn primary" type="button" data-route="developer">Analyze a Project</button>
+          <button class="btn primary" type="button" data-route="developer">Run AI Project Scan</button>
           <button class="btn" type="button" data-route="community">Submit Community Concern</button>
           <button class="btn" type="button" data-route="lender">View Lender Demo</button>
         </div>
       </div>
-      <div class="product-preview" aria-label="HydroComply document intelligence preview">
-        <div class="document-preview">
-          <div class="doc-header"><span></span><span></span><span></span><strong>EIA / ESIA Upload</strong></div>
-          <p>Middle Tamor Hydropower Project Environmental and Social Impact Assessment</p>
-          <p>Land acquisition, public hearings, aquatic ecology baseline, minimum environmental flow, grievance register format...</p>
-          <p class="highlight-line">No complete ESMS, stakeholder engagement plan, or monitoring responsibility matrix attached.</p>
-        </div>
-        <div class="finding-stack">
-          <article><span class="severity severity-critical">PS1 Critical Gap</span><strong>ESMS not found</strong></article>
-          <article><span class="severity severity-high">PS5 High Risk</span><strong>Replacement cost unclear</strong></article>
-          <article><span class="severity severity-critical">PS7 Missing Evidence</span><strong>IPP / FPIC records absent</strong></article>
-          <article><span class="status-pill status-green">Actions Created</span><strong>${critical + unresolvedGrievances} accountable follow-ups</strong></article>
+      <div class="product-mockup" aria-label="HydroComply product preview">
+        <div class="mockup-topbar"><span></span><strong>Middle Tamor HPP Project Room</strong><em>Readiness 42/100</em></div>
+        <div class="mockup-grid">
+          <article class="mock-document">
+            <p class="eyebrow">Document</p>
+            <h3>Middle Tamor EIA.pdf</h3>
+            <p>Land acquisition, public hearings, biodiversity baseline, grievance register format...</p>
+          </article>
+          <article class="mock-process">
+            <p class="eyebrow">AI processing</p>
+            ${["Extracting evidence", "Mapping to IFC PS1-PS8", "Detecting missing documents", "Creating actions"].map((item) => `<span>${item}</span>`).join("")}
+          </article>
+          <article class="mock-findings">
+            <p class="eyebrow">Findings</p>
+            <div><strong>PS1 Critical</strong><span>ESMS not found</span></div>
+            <div><strong>PS5 High Risk</strong><span>Replacement cost unclear</span></div>
+            <div><strong>PS7 Critical</strong><span>IPP/FPIC evidence missing</span></div>
+          </article>
         </div>
       </div>
+    </section>
+
+    <section class="credibility-strip" aria-label="Platform proof">
+      <span>${state.projects.length} demo project rooms</span>
+      <span>${standards.length} IFC Performance Standards</span>
+      <span>${critical} critical findings</span>
+      <span>${unresolvedGrievances} unresolved grievances</span>
     </section>
 
     <section class="public-section problem-band">
       <div><p class="eyebrow">Problem</p><h3>Infrastructure finance teams need proof, not folders.</h3></div>
-      <p>Hydropower projects often hold compliance evidence across EIA annexes, consultant files, grievance logs, field notes, and email threads. HydroComply turns those records into a shared evidence map that developers, lenders, reviewers, and communities can understand.</p>
+      <p>Hydropower projects hold compliance evidence across EIA annexes, consultant files, grievance logs, monitoring records, and site commitments. HydroComply organizes those records into a single trust layer for developers, lenders, reviewers, and communities.</p>
     </section>
 
-    <section class="public-section">
-      <div class="section-heading"><p class="eyebrow">How it works</p><h3>One shared compliance engine, different portal experiences.</h3></div>
+    <section class="public-section" id="demo">
+      <div class="section-heading"><p class="eyebrow">How HydroComply works</p><h3>From project documents to finance-grade accountability.</h3></div>
       <div class="process-grid">
-        ${["Upload project evidence", "Map to IFC PS1-PS8", "Detect gaps and risks", "Assign accountable actions"].map((item, index) => `
-          <article class="process-card"><span>${index + 1}</span><h3>${item}</h3><p class="muted">${["Documents, grievances, monitoring logs, and evidence enter one project room.", "AI extracts evidence and links it to standards, rules, and project commitments.", "Missing, stale, disputed, and unverified records become visible before financing.", "Each risk becomes an owner, due date, status, and immutable audit event."][index]}</p></article>
+        ${["Upload evidence", "Map to IFC standards", "Identify trust gaps", "Assign accountable actions"].map((item, index) => `
+          <article class="process-card"><span>${index + 1}</span><h3>${item}</h3><p class="muted">${["EIA, IEE, RAP, ESMP, monitoring reports, grievance logs, and field evidence enter one project room.", "Text is extracted and evidence is linked to PS1-PS8, project commitments, and transparent rules.", "Missing, stale, disputed, confidential, and unverified records become visible before financing.", "Each gap becomes an owner, due date, evidence request, status, and immutable audit event."][index]}</p></article>
         `).join("")}
       </div>
     </section>
 
-    <section class="public-section">
-      <div class="section-heading"><p class="eyebrow">Role-based portals</p><h3>Designed for the people who must trust the record.</h3></div>
+    <section class="public-section" id="portals">
+      <div class="section-heading"><p class="eyebrow">Role-based portals</p><h3>One project record, different trust lenses.</h3></div>
       <div class="role-mini-grid">
-        ${portalRoles.map((role) => `<article><strong>${escapeHtml(role.label)}</strong><p>${escapeHtml(role.text)}</p></article>`).join("")}
+        ${[
+          ["Developer Workspace", "Fix critical evidence gaps before lender review."],
+          ["Lender / Investor Review", "Read-only finance risk view with verified evidence and audit trail."],
+          ["Consultant Verification Queue", "Review AI findings and approve or reject evidence."],
+          ["Regulator Monitoring View", "Check submission completeness and inspection readiness."],
+          ["Community Portal", "Simple public grievance intake in Nepali or English."],
+          ["Community Liaison Desk", "Manage response deadlines, confidentiality, and resolution evidence."]
+        ].map(([title, text]) => `<article><strong>${title}</strong><p>${text}</p></article>`).join("")}
       </div>
     </section>
 
-    <section class="public-section preview-grid">
-      <article class="preview-panel"><p class="eyebrow">AI document analysis</p><h3>Evidence map, critical gaps, missing documents, and recommended actions from one EIA paste.</h3></article>
-      <article class="preview-panel"><p class="eyebrow">Community grievance</p><h3>Simple Nepali or English intake creates a reference number and routes the concern to IFC risk owners.</h3></article>
-      <article class="preview-panel"><p class="eyebrow">Lender trust</p><h3>Financing readiness is based on verified evidence, unresolved grievances, and audit history.</h3></article>
+    <section class="public-section feature-band" id="ai-analysis">
+      <div>
+        <p class="eyebrow">AI analysis demo</p>
+        <h3>Document intelligence built for E&S due diligence.</h3>
+        <p>Upload a PDF or paste text. HydroComply extracts evidence, maps standards, detects gaps, and prepares corrective actions while keeping the output reviewable.</p>
+      </div>
+      <button class="btn primary" type="button" data-route="developer">Run AI Project Scan</button>
+    </section>
+
+    <section class="public-section split-proof" id="community">
+      <article>
+        <p class="eyebrow">Community grievance demo</p>
+        <h3>Public intake without exposing technical compliance tools.</h3>
+        <p class="muted">Community members submit a concern, receive a reference number, and the system routes the concern to the right IFC risk owner.</p>
+      </article>
+      <article>
+        <p class="eyebrow">Lender trust</p>
+        <h3>Financing readiness depends on verified evidence, not uploaded files.</h3>
+        <p class="muted">Lenders see blockers, unresolved grievances, missed promises, and the audit trail before making a decision.</p>
+      </article>
     </section>
 
     <section class="public-section proof-section">
-      <div class="section-heading"><p class="eyebrow">Demo projects / proof</p><h3>Project rooms already loaded for the MVP.</h3></div>
+      <div class="section-heading"><p class="eyebrow">Demo projects</p><h3>Project rooms already loaded for the MVP.</h3></div>
       <div class="project-proof-grid">
         ${state.projects.map((item) => `<article class="card"><h3>${escapeHtml(item.name)}</h3><p class="muted">${escapeHtml(item.capacity)} - ${escapeHtml(item.district)}</p><span class="status-pill status-${statusForScore(average(state.scores[item.id])).toLowerCase()}">${average(state.scores[item.id])}/100 readiness</span></article>`).join("")}
       </div>
     </section>
 
     <section class="public-cta">
-      <h3>Start with a role-based demo workspace.</h3>
-      <button class="btn primary" type="button" data-route="roles">Choose Portal</button>
+      <div>
+        <p class="eyebrow">Start the demo</p>
+        <h3>Open a role-based workspace and inspect the same project record from a different trust lens.</h3>
+      </div>
+      <button class="btn primary" type="button" data-route="roles">Open Demo</button>
     </section>
   `;
 
@@ -541,21 +598,31 @@ function renderLandingPage() {
 }
 
 function renderRoleSelection() {
+  const roleCards = [
+    ["Developer Workspace", "Developer", "Upload evidence, close IFC gaps, manage actions, and prepare for lender review.", "DEV"],
+    ["Lender / Investor Review", "Lender / Investor", "Inspect verified evidence, unresolved blockers, grievance risk, and audit trail.", "LND"],
+    ["Consultant Verification Queue", "Consultant", "Review AI findings, verify evidence, reject weak documents, and add comments.", "CON"],
+    ["Regulator Monitoring View", "Regulator / Reviewer", "Check completeness, monitoring status, commitments, and inspection readiness.", "REG"],
+    ["Community Portal", "Community Member", "Submit a concern in simple Nepali or English and receive a reference number.", "COM"],
+    ["Community Liaison Desk", "Community Liaison", "Manage grievance response deadlines, confidentiality, escalation, and closure evidence.", "LIA"]
+  ];
   document.querySelector("#roleSelection").innerHTML = `
     <header class="public-nav">
-      <div><p class="eyebrow">Choose portal</p><strong>HydroComply Nepal</strong></div>
-      <button class="btn" type="button" data-back-home>Back to Home</button>
+      <div class="public-brand"><span class="brand-mark">HCN</span><div><strong>HydroComply Nepal</strong><small>Workspace selection</small></div></div>
+      <div class="public-nav-actions"><button class="btn" type="button" data-back-home>Back to Home</button></div>
     </header>
     <section class="role-select-hero">
       <p class="eyebrow">Role-based access</p>
-      <h2>Select how you want to review this hydropower project.</h2>
-      <p>Each portal uses the same local demo data, analyzer, evidence vault, grievances, actions, and audit trail, but presents the work in the language of that role.</p>
+      <h2>Choose your HydroComply workspace</h2>
+      <p>Each role sees the same project record through a different trust lens.</p>
     </section>
     <section class="role-card-grid">
-      ${portalRoles.map((role) => `
-        <button class="role-card" type="button" data-role-choice="${escapeHtml(role.label)}" data-entry="${role.entryView}">
-          <span>${escapeHtml(role.label)}</span>
-          <p>${escapeHtml(role.text)}</p>
+      ${roleCards.map(([title, roleValue, description, iconText]) => `
+        <button class="role-card" type="button" data-role-choice="${escapeHtml(roleValue)}" data-entry="${roleValue === "Community Member" ? "community" : "dashboard"}">
+          <span class="role-card-icon">${escapeHtml(iconText)}</span>
+          <strong>${escapeHtml(title)}</strong>
+          <p>${escapeHtml(description)}</p>
+          <em>Enter workspace</em>
         </button>
       `).join("")}
     </section>
@@ -572,6 +639,60 @@ function renderRoleSelection() {
 }
 
 function renderCommunityPortal() {
+  {
+    document.querySelector("#communityPortal").innerHTML = `
+      <section class="community-public">
+        <header class="community-public-header">
+          <button class="btn" type="button" data-community-home>Back to HydroComply</button>
+          <div class="community-language">English / नेपाली</div>
+        </header>
+        <main class="community-phone-card">
+          <div class="community-intro">
+            <p class="eyebrow">Community Concern Intake</p>
+            <h2>Do you have a concern about a hydropower project?</h2>
+            <p class="nepali-label">जलविद्युत आयोजनासम्बन्धी गुनासो छ?</p>
+            <p>Submit a concern in your own words. You can stay anonymous and receive a reference number.</p>
+          </div>
+          <form class="community-card" id="communityForm">
+            <section class="community-step">
+              <span>Step 1</span>
+              <label for="communityIdentity">Do you want to stay anonymous?</label>
+              <select id="communityIdentity">
+                <option value="Anonymous">Stay anonymous</option>
+                <option value="Named">Give my name</option>
+              </select>
+              <input id="communityName" placeholder="Name, optional" />
+            </section>
+            <section class="community-step">
+              <span>Step 2</span>
+              <label for="communityText">What happened?</label>
+              <textarea id="communityText" placeholder="तपाईंको गुनासो यहाँ लेख्नुहोस् / Write your concern here..."></textarea>
+            </section>
+            <section class="community-step">
+              <span>Step 3</span>
+              <label for="communityProject">Which project is this about?</label>
+              <select id="communityProject">${state.projects.map((item) => `<option value="${item.id}" ${item.id === state.selectedProjectId ? "selected" : ""}>${escapeHtml(item.name)}</option>`).join("")}</select>
+            </section>
+            <div class="community-optional-grid">
+              <div class="field"><label for="communityPhone">Phone number, optional</label><input id="communityPhone" placeholder="+977..." /></div>
+              <div class="field"><label for="communityLocation">Location, optional</label><input id="communityLocation" placeholder="Location" /></div>
+              <div class="field"><label for="communityConfidentiality">Confidentiality</label><select id="communityConfidentiality"><option>Private</option><option>Confidential</option><option>Retaliation-risk</option><option>Public anonymized</option></select></div>
+              <div class="field"><label for="communityPhoto">Photo upload placeholder</label><input id="communityPhoto" type="file" disabled /></div>
+            </div>
+            <div class="toolbar"><button class="btn" type="button" id="communityNepaliExample">Load Nepali example</button><button class="btn primary" type="submit">Submit Concern</button></div>
+          </form>
+          <section id="communityReceipt" class="community-receipt" hidden></section>
+        </main>
+      </section>
+    `;
+    document.querySelector("[data-community-home]")?.addEventListener("click", () => navigate("publicHome"));
+    document.querySelector("#communityNepaliExample")?.addEventListener("click", () => {
+      document.querySelector("#communityText").value = nepaliGrievance;
+      document.querySelector("#communityConfidentiality").value = "Confidential";
+    });
+    document.querySelector("#communityForm")?.addEventListener("submit", submitCommunityConcern);
+    return;
+  }
   document.querySelector("#communityPortal").innerHTML = `
     <section class="community-shell">
       <header class="community-header">
@@ -652,11 +773,12 @@ function submitCommunityConcern(event) {
   document.querySelector("#communityReceipt").innerHTML = `
     <h3>Your concern has been received.</h3>
     <p>Reference number: <strong>${escapeHtml(ref)}</strong></p>
-    <p>You can use this number to check your complaint status.</p>
+    <p>Please save this reference number. You can use it to check your complaint status.</p>
     <div class="split-meta">
+      <span class="tag">Status: New</span>
+      <span class="tag">${escapeHtml(classification.category)}</span>
       <span class="tag">${escapeHtml(classification.standard)}</span>
       <span class="severity severity-${severityClass(classification.severity)}">${escapeHtml(classification.severity)}</span>
-      <span class="tag">${escapeHtml(classification.category)}</span>
     </div>
   `;
   document.querySelector("#communityForm").reset();
@@ -736,6 +858,20 @@ function complianceMetrics(projectId = state.selectedProjectId) {
   };
 }
 
+function projectRoomHeader(activeView = currentView) {
+  const item = project();
+  return `
+    <section class="project-room-header">
+      <div>
+        <p class="eyebrow">Project Room</p>
+        <h2>${escapeHtml(item.name)} Project Room</h2>
+        <p>${escapeHtml(item.capacity)} - ${escapeHtml(item.river)} - ${escapeHtml(item.district)} - ${escapeHtml(item.status)}</p>
+      </div>
+      ${projectRoomTabs(activeView)}
+    </section>
+  `;
+}
+
 function projectRoomTabs() {
   const tabs = [
     ["dashboard", "Overview"],
@@ -747,7 +883,34 @@ function projectRoomTabs() {
     ["audit", "Audit"],
     ["reports", "Reports"]
   ];
-  return `<div class="project-tabs">${tabs.map(([view, label]) => `<button type="button" data-tab-view="${view}">${label}</button>`).join("")}</div>`;
+  return `<div class="project-tabs">${tabs.map(([view, label]) => `<button class="${view === currentView ? "active" : ""}" type="button" data-tab-view="${view}">${label}</button>`).join("")}</div>`;
+}
+
+function bindProjectRoomControls() {
+  document.querySelectorAll("[data-tab-view]").forEach((button) => {
+    button.addEventListener("click", () => setView(button.dataset.tabView));
+  });
+}
+
+function actionForFinding(item) {
+  return projectItems("actions").find((actionItem) => actionItem.findingId === item.id || actionItem.title.toLowerCase().includes(item.standard.toLowerCase()));
+}
+
+function evidenceForStandard(standard) {
+  return projectItems("evidence").filter((item) => item.linkedStandard === standard);
+}
+
+function renderAuditTimelineItem(item) {
+  return `
+    <article class="audit-event">
+      <time>${new Date(item.createdAt).toLocaleString()}</time>
+      <div>
+        <span class="tag">${escapeHtml(item.actor)}</span>
+        <h3>${escapeHtml(item.action)}</h3>
+        <p>${escapeHtml(item.detail)}</p>
+      </div>
+    </article>
+  `;
 }
 
 function renderDashboard() {
@@ -761,6 +924,59 @@ function renderDashboard() {
 }
 
 function renderDeveloperDashboard() {
+  {
+    const metrics = complianceMetrics();
+    const priorityFixes = projectItems("findings")
+      .filter((item) => ["Critical", "High"].includes(item.severity) && item.status !== "Closed")
+      .slice(0, 3);
+    const evidenceChecklist = [
+      "ESMS",
+      "Stakeholder Engagement Plan",
+      "Grievance Mechanism",
+      "RAP / compensation methodology",
+      "Livelihood restoration monitoring",
+      "IPP / FPIC applicability evidence"
+    ];
+    document.querySelector("#dashboard").innerHTML = `
+      ${projectRoomHeader("dashboard")}
+      <section class="developer-kpi-grid">
+        <article class="score-card"><span>Readiness score</span><strong>${metrics.readiness}/100</strong><p>Current IFC readiness after open gaps and evidence trust are considered.</p></article>
+        <article class="score-card danger"><span>Critical blockers</span><strong>${metrics.criticalGaps}</strong><p>Mandatory evidence gaps before lender review.</p></article>
+        <article class="score-card warning"><span>Open grievances</span><strong>${metrics.openGrievances}</strong><p>Community cases still active in this project room.</p></article>
+        <article class="score-card warning"><span>Overdue actions</span><strong>${metrics.overdueActions}</strong><p>Commitments past their response date.</p></article>
+      </section>
+
+      <section class="developer-workspace">
+        <div class="panel priority-panel">
+          <div class="panel-header"><div><h3>Priority Fixes Before Lender Review</h3><p>What the project team should fix next.</p></div><button class="btn primary" data-hero-view="analyst" type="button">Run AI scan</button></div>
+          <div class="priority-list">
+            ${priorityFixes.map((item) => {
+              const linkedAction = actionForFinding(item);
+              return `<article class="priority-item">
+                <span class="severity severity-${severityClass(item.severity)}">${escapeHtml(item.standard)} ${escapeHtml(item.severity)}</span>
+                <div><h3>${escapeHtml(item.title)}</h3><p>${escapeHtml(item.rationale)}</p></div>
+                <footer><span>Owner: ${escapeHtml(linkedAction?.owner || ownerFor(item.standard))}</span><span>Due: ${escapeHtml(linkedAction?.dueDate || dueDateFor(item.severity))}</span></footer>
+              </article>`;
+            }).join("") || empty("No priority fixes are currently open.")}
+          </div>
+        </div>
+        <aside class="panel evidence-next">
+          <div class="panel-header"><div><h3>Next Required Evidence</h3><p>Documents most likely to improve lender trust.</p></div></div>
+          <div class="checklist">${evidenceChecklist.map((item) => `<label><input type="checkbox" disabled /> <span>${escapeHtml(item)}</span></label>`).join("")}</div>
+        </aside>
+      </section>
+
+      <section class="panel recent-activity-panel">
+        <div class="panel-header"><div><h3>Recent Activity</h3><p>Latest accountability events for this project room.</p></div></div>
+        <div class="audit-timeline compact">${state.auditLogs.slice(0, 5).map(renderAuditTimelineItem).join("")}</div>
+      </section>
+    `;
+    document.querySelectorAll("[data-hero-view]").forEach((button) => {
+      button.addEventListener("click", () => setView(button.dataset.heroView));
+    });
+    bindProjectRoomControls();
+    return;
+  }
   const redStandards = standards.filter((standard) => statusForScore(selectedScores()[standard.code]) === "Red").length;
   const overdue = state.actions.filter((item) => item.status === "Overdue").length;
   const unresolvedGrievances = state.grievances.filter((item) => !["Closed", "Verified"].includes(item.status)).length;
@@ -897,6 +1113,66 @@ function metric(label, value, hint, icon = "📌", type = "", counter = null) {
 }
 
 function renderLenderDashboard() {
+  {
+    const metrics = complianceMetrics();
+    const readiness = Math.max(0, metrics.readiness - metrics.criticalGaps * 8 - metrics.highRiskGrievances * 4);
+    const blockers = projectItems("findings").filter((item) => ["Critical", "High"].includes(item.severity) && item.status !== "Closed");
+    const verified = projectItems("evidence").filter((item) => item.status === "Verified");
+    const filed = projectItems("evidence").filter((item) => item.status === "Filed");
+    const disputed = projectItems("evidence").filter((item) => ["Disputed", "Rejected", "Expired"].includes(item.status));
+    const required = Math.max(17, projectItems("evidence").length + blockers.length);
+    document.querySelector("#dashboard").innerHTML = `
+      ${projectRoomHeader("dashboard")}
+      <section class="lender-summary">
+        <div>
+          <p class="eyebrow">Investment Risk Review</p>
+          <h2>${escapeHtml(project().name)} is ${readiness >= 75 ? "finance-ready" : "not finance-ready"}</h2>
+          <p>Mandatory PS1, PS5, and PS7 evidence remains unverified.</p>
+        </div>
+        <div class="readiness-meter"><strong>${readiness}/100</strong><span>Readiness</span></div>
+      </section>
+      <section class="trust-panel">
+        <article><span>Verified Evidence</span><strong>${verified.length} / ${required} required</strong></article>
+        <article><span>Critical Blockers</span><strong>${blockers.filter((item) => item.severity === "Critical").length} open</strong></article>
+        <article><span>Grievance Risk</span><strong>${metrics.highRiskGrievances} high-risk unresolved</strong></article>
+      </section>
+      <section class="panel">
+        <div class="panel-header"><div><h3>Blocking Issues</h3><p>Read-only finance review of unresolved IFC blockers.</p></div><button class="btn primary" type="button" data-report-export>Export lender summary</button></div>
+        <div class="table-wrap">
+          <table class="table">
+            <thead><tr><th>IFC Standard</th><th>Issue</th><th>Severity</th><th>Evidence status</th><th>Owner</th><th>Due date</th></tr></thead>
+            <tbody>
+              ${blockers.map((item) => {
+                const linkedAction = actionForFinding(item);
+                const evidenceStatus = evidenceForStandard(item.standard).some((evidenceItem) => evidenceItem.status === "Verified") ? "Verified" : "Unverified";
+                return `<tr><td><strong>${escapeHtml(item.standard)}</strong></td><td>${escapeHtml(item.title)}</td><td><span class="severity severity-${severityClass(item.severity)}">${escapeHtml(item.severity)}</span></td><td>${evidenceStatus}</td><td>${escapeHtml(linkedAction?.owner || ownerFor(item.standard))}</td><td>${escapeHtml(linkedAction?.dueDate || dueDateFor(item.severity))}</td></tr>`;
+              }).join("")}
+            </tbody>
+          </table>
+        </div>
+      </section>
+      <section class="lender-body-grid">
+        <div class="panel">
+          <div class="panel-header"><div><h3>Evidence Trust</h3><p>Uploaded does not mean lender-trusted.</p></div></div>
+          <div class="trust-lanes">
+            ${[
+              ["Verified", verified],
+              ["Filed but unverified", filed],
+              ["Disputed / rejected", disputed],
+              ["Missing", blockers.filter((item) => evidenceForStandard(item.standard).length === 0)]
+            ].map(([label, items]) => `<article><strong>${label}</strong><span>${items.length}</span></article>`).join("")}
+          </div>
+        </div>
+        <div class="panel">
+          <div class="panel-header"><div><h3>Audit Trail Preview</h3><p>Signals used for lender confidence.</p></div></div>
+          <div class="audit-timeline compact">${state.auditLogs.slice(0, 4).map(renderAuditTimelineItem).join("")}</div>
+        </div>
+      </section>
+    `;
+    document.querySelector("[data-report-export]")?.addEventListener("click", () => setView("reports"));
+    bindProjectRoomControls();
+    return;
+  }
   const metrics = complianceMetrics();
   const readiness = Math.max(0, metrics.readiness - metrics.criticalGaps * 8 - metrics.highRiskGrievances * 4);
   const blockers = projectItems("findings").filter((item) => ["Critical", "High"].includes(item.severity) && item.status !== "Closed").slice(0, 5);
@@ -935,6 +1211,53 @@ function renderLenderDashboard() {
 }
 
 function renderConsultantDashboard() {
+  {
+    const queue = projectItems("findings").filter((item) => item.aiGenerated && item.status !== "Closed");
+    const selected = queue[0];
+    document.querySelector("#dashboard").innerHTML = `
+      ${projectRoomHeader("dashboard")}
+      <section class="queue-heading">
+        <div><p class="eyebrow">Consultant portal</p><h2>Evidence Verification Queue</h2><p>Review AI findings, linked evidence, confidence, and required reviewer action.</p></div>
+      </section>
+      <section class="consultant-queue-layout">
+        <div class="panel queue-list-panel">
+          <div class="panel-header"><div><h3>AI findings needing review</h3><p>${queue.length} open review items</p></div></div>
+          <div class="queue-list">
+            ${queue.map((item, index) => `<button class="queue-row ${index === 0 ? "active" : ""}" type="button">
+              <span>${escapeHtml(item.standard)}</span>
+              <strong>${escapeHtml(item.title)}</strong>
+              <em>${escapeHtml(item.severity)} - ${item.confidence}% confidence</em>
+            </button>`).join("") || empty("No AI findings need review.")}
+          </div>
+        </div>
+        <div class="panel selected-finding-panel">
+          ${selected ? `
+            <div class="panel-header"><div><p class="eyebrow">${selected.standard} - ${selected.confidence}% confidence</p><h3>${escapeHtml(selected.title)}</h3></div><span class="severity severity-${severityClass(selected.severity)}">${escapeHtml(selected.severity)}</span></div>
+            <p class="muted">${escapeHtml(selected.rationale)}</p>
+            <div class="finding-detail-grid">
+              ${detail("Linked evidence", `${evidenceForStandard(selected.standard).length} records`)}
+              ${detail("Evidence status", evidenceForStandard(selected.standard).some((item) => item.status === "Verified") ? "Verified" : "Needs review")}
+              ${detail("Recommended action", selected.recommendation)}
+            </div>
+            <div class="toolbar review-actions"><button class="btn primary" data-finding-review="${selected.id}:Verified" type="button">Verify finding</button><button class="btn danger" data-finding-review="${selected.id}:Rejected" type="button">Reject finding</button><button class="btn warning" data-finding-review="${selected.id}:Needs more evidence" type="button">Needs more evidence</button><button class="btn" data-finding-review="${selected.id}:Comment added" type="button">Add comment</button></div>
+          ` : empty("No selected finding.")}
+        </div>
+      </section>
+    `;
+    document.querySelectorAll("[data-finding-review]").forEach((button) => {
+      button.addEventListener("click", () => {
+        const [id, status] = button.dataset.findingReview.split(":");
+        const item = state.findings.find((findingItem) => findingItem.id === id);
+        item.status = status;
+        state.auditLogs.unshift(audit("Consultant reviewed finding", `${item.title} marked ${status}.`, state.role, new Date().toISOString()));
+        saveState();
+        render();
+        toast(`Finding marked ${status}.`);
+      });
+    });
+    bindProjectRoomControls();
+    return;
+  }
   const queue = projectItems("findings").filter((item) => item.aiGenerated && item.status !== "Closed");
   const disputed = projectItems("evidence").filter((item) => ["Disputed", "Rejected"].includes(item.status));
   document.querySelector("#dashboard").innerHTML = `
@@ -1086,11 +1409,12 @@ function renderAnalyst() {
   const evidenceItems = projectItems("evidence");
   const actions = projectItems("actions");
   document.querySelector("#analyst").innerHTML = `
+    ${projectRoomHeader("analyst")}
     <section class="document-intel-hero">
       <div>
         <p class="eyebrow">AI Document Intelligence</p>
-        <h2>Read project documents, map IFC evidence, and create accountable actions.</h2>
-        <p>Transparent local analysis preserves the MVP behavior while making the scan feel like the core product demo.</p>
+        <h2>AI Document Intelligence</h2>
+        <p>Upload or paste an EIA, IEE, RAP, ESMP, monitoring report, or grievance log. HydroComply extracts evidence, maps it to IFC PS1-PS8, and creates accountable actions.</p>
       </div>
       <div class="processing-steps">
         ${["Reading document", "Extracting evidence", "Mapping to IFC PS1-PS8", "Detecting gaps", "Creating actions"].map((step, index) => `<span>${index + 1}. ${step}</span>`).join("")}
@@ -1143,6 +1467,9 @@ function renderAnalyst() {
             <p>Detected standards and evidence extracted for ${escapeHtml(project().name)}.</p>
           </div>
         </div>
+        <div class="evidence-chip-grid">
+          ${["Land acquisition detected", "Public consultation detected", "Biodiversity baseline detected", "Grievance register format detected", "Indigenous communities referenced"].map((item) => `<span>${item}</span>`).join("")}
+        </div>
         <div class="evidence-map-list">
           ${standards.map((standard) => {
             const linkedEvidence = evidenceItems.filter((item) => item.linkedStandard === standard.code);
@@ -1158,6 +1485,14 @@ function renderAnalyst() {
             <h3>IFC Risk Findings</h3>
             <p>Project summary, critical gaps, missing documents, recommended actions, and confidence.</p>
           </div>
+        </div>
+        <div class="risk-finding-stack">
+          ${[
+            ["PS1 Critical Gap", "ESMS and grievance mechanism not found", "ESMS, SEP, grievance procedure", "Upload ESMS package"],
+            ["PS5 High Risk", "Replacement-cost methodology unclear", "RAP, compensation methodology", "Submit replacement-cost evidence"],
+            ["PS7 Critical Gap", "IPP/FPIC evidence missing", "IPP, FPIC applicability evidence", "Confirm PS7 applicability"],
+            ["PS6 Monitoring Weakness", "Recent biodiversity monitoring absent", "Biodiversity monitoring logs", "Upload monitoring evidence"]
+          ].map(([label, explanation, missing, actionText]) => `<article><span class="severity ${label.includes("High") ? "severity-high" : "severity-critical"}">${label}</span><p>${explanation}</p><small>Missing: ${missing}</small><strong>${actionText}</strong><em>Action created</em></article>`).join("")}
         </div>
         <div class="scan-summary">
           ${detail("Project summary", project().status)}
@@ -1241,6 +1576,7 @@ function renderAnalyst() {
       toast(`Could not read ${file.name}. Please try another file or paste the text manually.`);
     }
   });
+  bindProjectRoomControls();
 }
 
 async function extractPdfText(file) {
@@ -1453,6 +1789,65 @@ function whyScore(code, score, findings, evidenceItems) {
 function renderEvidence() {
   const reviewDisabled = canReviewEvidence() ? "" : "disabled";
   const reviewHint = canReviewEvidence() ? "" : ` title="${escapeHtml(state.role)} cannot verify evidence in this demo"`;
+  {
+    const items = projectItems("evidence");
+    const filters = ["All", "Verified", "Filed", "Expired", "Disputed", "Missing", "Confidential"];
+    const tableRows = items.map((item) => `
+      <tr>
+        <td><strong>${escapeHtml(item.evidenceType)}</strong><p class="muted">${escapeHtml(item.summary)}</p></td>
+        <td>${escapeHtml(item.linkedStandard)}</td>
+        <td>${escapeHtml(item.source)}</td>
+        <td><span class="status-pill status-${statusClassForEvidence(item.status)}">${escapeHtml(item.status)}</span></td>
+        <td>${escapeHtml(item.uploadedBy)}</td>
+        <td>${escapeHtml(item.verifiedBy || "Not verified")}</td>
+        <td>${escapeHtml(item.capturedAt)}</td>
+        <td>${item.confidential ? "Confidential" : "Shared"}</td>
+        <td class="table-actions"><button class="btn" data-evidence-status="${item.id}:Verified" type="button" ${reviewDisabled}${reviewHint}>Verify</button><button class="btn warning" data-evidence-status="${item.id}:Disputed" type="button" ${reviewDisabled}${reviewHint}>Dispute</button><button class="btn danger" data-evidence-status="${item.id}:Rejected" type="button" ${reviewDisabled}${reviewHint}>Reject</button></td>
+      </tr>
+    `).join("");
+    document.querySelector("#evidence").innerHTML = `
+      ${projectRoomHeader("evidence")}
+      <section class="evidence-header panel">
+        <div><p class="eyebrow">Trust repository</p><h3>Evidence Vault</h3><p>Filed documents do not improve lender trust until verified.</p></div>
+        <div class="evidence-filters">${filters.map((filter) => `<button type="button">${filter}</button>`).join("")}</div>
+      </section>
+      <section class="evidence-layout">
+        <div class="panel">
+          <div class="table-wrap">
+            <table class="table evidence-table">
+              <thead><tr><th>Evidence</th><th>IFC Standard</th><th>Source</th><th>Status</th><th>Uploaded by</th><th>Verified by</th><th>Date</th><th>Confidentiality</th><th>Action</th></tr></thead>
+              <tbody>${tableRows || `<tr><td colspan="9">${empty("No evidence records yet.")}</td></tr>`}</tbody>
+            </table>
+          </div>
+        </div>
+        <aside class="panel evidence-explainer">
+          <h3>Why evidence status matters</h3>
+          <p><strong>Filed</strong> means uploaded by a project team.</p>
+          <p><strong>Verified</strong> means reviewed by a consultant or lender.</p>
+          <p><strong>Disputed</strong> means the document does not prove the requirement.</p>
+        </aside>
+      </section>
+    `;
+    document.querySelectorAll("[data-evidence-status]").forEach((button) => {
+      button.addEventListener("click", () => {
+        if (!canReviewEvidence()) {
+          toast(`${state.role} cannot verify evidence. Switch to Lender, Consultant, or Reviewer.`);
+          return;
+        }
+        const [id, status] = button.dataset.evidenceStatus.split(":");
+        const item = state.evidence.find((evidenceItem) => evidenceItem.id === id);
+        item.status = status;
+        item.verifiedBy = status === "Verified" ? state.role : "";
+        state.auditLogs.unshift(audit(`Evidence ${status.toLowerCase()}`, `${item.evidenceType} marked ${status} by ${state.role}.`, state.role, new Date().toISOString()));
+        recalculateScores();
+        saveState();
+        render();
+        toast(`Evidence marked ${status}. Score explanation updated.`);
+      });
+    });
+    bindProjectRoomControls();
+    return;
+  }
   const rows = projectItems("evidence").map((item) => `
     <article class="card">
       <div class="evidence-topline">
@@ -1844,6 +2239,21 @@ function renderRules() {
 }
 
 function renderAudit() {
+  {
+    document.querySelector("#audit").innerHTML = `
+      ${projectRoomHeader("audit")}
+      <section class="audit-page-header">
+        <p class="eyebrow">Accountability Trail</p>
+        <h2>Who knew what, when, and what changed.</h2>
+        <p>Every upload, grievance, finding, review, assignment, and clarification is timestamped without delete controls.</p>
+      </section>
+      <section class="panel audit-panel">
+        <div class="audit-timeline">${state.auditLogs.map(renderAuditTimelineItem).join("")}</div>
+      </section>
+    `;
+    bindProjectRoomControls();
+    return;
+  }
   const selectedFinding = projectItems("findings").find((item) => item.status !== "Closed") || projectItems("findings")[0];
   document.querySelector("#audit").innerHTML = `
     <div class="grid two">

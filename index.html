@@ -51,9 +51,14 @@
             <p class="eyebrow" id="viewEyebrow">Portfolio dashboard</p>
             <h2 id="viewTitle">Finance-ready hydropower compliance intelligence</h2>
           </div>
-          <div class="project-picker">
-            <label for="projectSelect">Project</label>
-            <select id="projectSelect"></select>
+          <div class="topbar-actions">
+            <div class="project-picker">
+              <label for="projectSelect">Project</label>
+              <select id="projectSelect"></select>
+            </div>
+            <span id="roleBadge" class="role-badge">Role</span>
+            <button id="switchRoleBtn" class="btn" type="button">Switch Role</button>
+            <button id="backHomeBtn" class="btn" type="button">Back to Home</button>
           </div>
         </header>
 
@@ -77,8 +82,10 @@
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
     <script>
-      pdfjsLib.GlobalWorkerOptions.workerSrc =
-        "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+      if (window.pdfjsLib) {
+        pdfjsLib.GlobalWorkerOptions.workerSrc =
+          "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+      }
     </script>
     <script src="app.js"></script>
   </body>
