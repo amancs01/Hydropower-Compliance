@@ -1317,6 +1317,21 @@ textarea:focus-visible {
   grid-column: 1 / -1;
 }
 
+.file-status {
+  margin-top: 8px;
+  color: var(--muted);
+  font-size: 0.82rem;
+  line-height: 1.4;
+}
+
+.file-status.warning {
+  color: var(--amber);
+}
+
+.file-status.error {
+  color: var(--red);
+}
+
 .checkbox-row {
   display: flex;
   align-items: center;

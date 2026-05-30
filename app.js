@@ -1102,7 +1102,7 @@ function renderAnalyst() {
         <div class="panel-header">
           <div>
             <h3>Uploaded / Pasted Document</h3>
-            <p>EIA, IEE, RAP, ESMP, monitoring reports, consultation records, or grievance logs.</p>
+            <p>Upload EIA, IEE, RAP, ESMP, biodiversity report, monitoring report, or grievance log as PDF or text. HydroComply will extract the text, map evidence to IFC PS1-PS8, detect gaps, and create action items.</p>
           </div>
           <span class="tag">No API key required</span>
         </div>
@@ -1119,8 +1119,10 @@ function renderAnalyst() {
             </select>
           </div>
           <div class="field">
-            <label for="docFile">Text file upload</label>
-            <input id="docFile" type="file" accept=".txt,.md,.csv" />
+            <label for="docFile">Upload PDF or text file</label>
+            <input id="docFile" type="file" accept=".pdf,.txt,.md,.csv" />
+            <p class="file-status">Supported: PDF, TXT, MD, CSV. PDF text will be extracted automatically.</p>
+            <p id="fileStatus" class="file-status">No file uploaded yet.</p>
           </div>
           <div class="field full">
             <label for="docText">Project document text</label>
@@ -1193,9 +1195,78 @@ function renderAnalyst() {
   document.querySelector("#docFile").addEventListener("change", async (event) => {
     const file = event.target.files[0];
     if (!file) return;
-    document.querySelector("#docText").value = await file.text();
-    toast(`${file.name} loaded into the analyzer.`);
+
+    const docText = document.querySelector("#docText");
+    const fileStatus = document.querySelector("#fileStatus");
+
+    try {
+      toast(`Reading ${file.name}...`);
+      if (fileStatus) {
+        fileStatus.className = "file-status";
+        fileStatus.textContent = `Reading ${file.name}...`;
+      }
+
+      let extractedText = "";
+
+      if (file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf")) {
+        extractedText = await extractPdfText(file);
+      } else {
+        extractedText = await file.text();
+      }
+
+      if (!extractedText || extractedText.trim().length < 50) {
+        const warning = "This PDF may be scanned or image-based. Browser text extraction cannot read scanned images. For the demo, use a text-based PDF or paste the document text manually.";
+        docText.value = extractedText || "";
+        if (fileStatus) {
+          fileStatus.className = "file-status warning";
+          fileStatus.textContent = warning;
+        }
+        toast(warning);
+        return;
+      }
+
+      docText.value = extractedText;
+      const statusMessage = `${file.name} loaded. ${extractedText.length.toLocaleString()} characters extracted.`;
+      if (fileStatus) {
+        fileStatus.className = "file-status";
+        fileStatus.textContent = statusMessage;
+      }
+      toast(statusMessage);
+    } catch (error) {
+      console.error(error);
+      if (fileStatus) {
+        fileStatus.className = "file-status error";
+        fileStatus.textContent = "PDF extraction failed. Try another PDF or paste text manually.";
+      }
+      toast(`Could not read ${file.name}. Please try another file or paste the text manually.`);
+    }
   });
+}
+
+async function extractPdfText(file) {
+  if (!window.pdfjsLib) {
+    throw new Error("PDF.js is not loaded. Please check your internet connection or CDN script.");
+  }
+
+  const arrayBuffer = await file.arrayBuffer();
+  const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+
+  let fullText = "";
+
+  for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
+    const page = await pdf.getPage(pageNumber);
+    const textContent = await page.getTextContent();
+
+    const pageText = textContent.items
+      .map((item) => item.str)
+      .join(" ")
+      .replace(/\s+/g, " ")
+      .trim();
+
+    fullText += `\n\n--- Page ${pageNumber} ---\n${pageText}`;
+  }
+
+  return fullText.trim();
 }
 
 function lenderSummary() {
