@@ -367,6 +367,17 @@ def ensure_seed_schema():
                 if column_name not in evidence_columns:
                     connection.execute(text(f"ALTER TABLE evidence_items ADD COLUMN {column_name} {column_type}"))
 
+        if "lender_trust_reports" in inspector.get_table_names():
+            trust_report_columns = {column["name"] for column in inspector.get_columns("lender_trust_reports")}
+            for column_name, column_type in {
+                "financing_gate": "VARCHAR(100)",
+                "blocker_summary": "TEXT",
+                "required_next_steps": "TEXT",
+                "evidence_trust_level": "VARCHAR(50)",
+            }.items():
+                if column_name not in trust_report_columns:
+                    connection.execute(text(f"ALTER TABLE lender_trust_reports ADD COLUMN {column_name} {column_type}"))
+
         snapshot_columns = inspector.get_columns("score_snapshots")
         needs_snapshot_rebuild = any(
             column["name"] in {"ps1_score", "ps5_score", "ps7_score", "overall_score", "risk_level"}

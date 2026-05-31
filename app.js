@@ -3652,6 +3652,10 @@ function renderLenderTrustReport() {
   const metrics = complianceMetrics();
   const trustScore = report?.final_trust_score ?? 56;
   const risk = report?.final_risk_level ?? "High";
+  const financingGate = report?.financing_gate || (risk === "High" ? "Manual verification required" : "Ready for lender review");
+  const blockerSummary = report?.blocker_summary || "Manual verification required before financing decision.";
+  const requiredNextSteps = report?.required_next_steps || "Resolve contested claims, verify filed evidence, and refresh the lender trust report.";
+  const evidenceTrustLevel = report?.evidence_trust_level || "Low";
   const controversies = currentProjectVerification(state.controversies);
   const reportClaims = currentProjectVerification(state.reportClaims);
   const contestedClaims = reportClaims.filter((claim) => {
@@ -3664,6 +3668,16 @@ function renderLenderTrustReport() {
   node.innerHTML = `
     ${projectRoomHeader("trust-report")}
     ${pageHeader("Lender Trust Report", "Manual verification required before financing.", "Credit risk memo")}
+    <section class="panel financing-gate-panel">
+      <span>Financing Gate</span>
+      <strong>${escapeHtml(financingGate)}</strong>
+      <p>${escapeHtml(blockerSummary)}</p>
+    </section>
+    <section class="panel compact-note lender-strict-language">
+      <strong>Filed evidence is not treated as verified.</strong>
+      <span>Community feedback contradicts the report claim.</span>
+      <span>Manual verification required before financing decision.</span>
+    </section>
     <section class="lender-memo">
       <div>
         <span>Final Trust Score</span>
@@ -3675,18 +3689,18 @@ function renderLenderTrustReport() {
       </div>
       <div>
         <span>Recommendation</span>
-        <strong>Manual verification required</strong>
+        <strong>${escapeHtml(financingGate)}</strong>
       </div>
     </section>
     <div class="toolbar lender-print-actions"><button class="btn primary" type="button" data-print-report>Print / Save PDF</button></div>
     <section class="metric-grid four compact-metrics">
       ${metricCard("Document score", readinessText(metrics.readiness))}
+      ${metricCard("Evidence trust", evidenceTrustLevel)}
       ${metricCard("Community validation", report?.community_validation_score ?? "Pending")}
       ${metricCard("Worker validation", report?.worker_validation_score ?? "Pending")}
-      ${metricCard("Manual verification", report?.manual_verification_score ?? "Pending")}
     </section>
     <section class="panel">
-      <div class="panel-header compact"><div><h3>Contested claims requiring verification</h3><p>Report claims stay untrusted until field feedback or manual review resolves them.</p></div><button class="btn" type="button" data-tab-view="controversies">View all</button></div>
+      <div class="panel-header compact"><div><h3>Contested claims requiring verification</h3><p>Report claims stay untrusted until field feedback or manual review resolves them. Community feedback contradicts the report claim.</p></div><button class="btn" type="button" data-tab-view="controversies">View all</button></div>
       ${compactTable(["Standard", "Report claim", "Verification signal", "Status"], (contestedClaims.length ? contestedClaims : reportClaims.slice(0, 3)).map((claim) => `<tr><td>${escapeHtml(claim.standard || "IFC")}</td><td>${escapeHtml(claim.claim_text || "Claim pending extraction")}</td><td>${escapeHtml(verificationSourceForClaim(claim.verification_status))}</td><td>${statusPill(claim.verification_status || "document_claim_only", claim.verification_status === "contradicted_by_feedback" ? "amber" : "blue")}</td></tr>`), "No extracted report claims yet.")}
       ${blockers.length ? accordion("Related high-risk findings", compactTable(["Standard", "Issue", "Severity", "Status"], blockers.map((item) => `<tr><td>${escapeHtml(item.standard)}</td><td>${escapeHtml(item.title)}</td><td>${statusPill(item.severity, severityClass(item.severity))}</td><td>${escapeHtml(item.status)}</td></tr>`), "No unresolved blockers.")) : ""}
     </section>
@@ -3698,6 +3712,7 @@ function renderLenderTrustReport() {
         ${metricCard("Manual checks pending", manualPending.length || controversies.length || blockers.length)}
       </div>
       ${accordion("Why this score?", `<p>${escapeHtml(report?.summary || "Some IFC standards remain unverified or insufficiently evidenced.")}</p>`)}
+      ${accordion("Required next steps", `<p>${escapeHtml(requiredNextSteps)}</p>`)}
     </section>
     <div class="toolbar"><button class="btn" type="button" data-refresh-verification>Refresh</button></div>
   `;

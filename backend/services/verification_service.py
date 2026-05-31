@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 from database.models import (
     ControversyFlag,
     AuditLog,
+    EvidenceItem,
     LenderTrustReport,
     ManualVerificationTask,
     ReportClaim,
@@ -226,18 +227,62 @@ def validation_score(responses):
     return max(0, min(100, score))
 
 
+def evidence_trust(evidence_items):
+    if not evidence_items:
+        return "Low", 0, 0
+    trusted_count = len([item for item in evidence_items if item.status == "Verified"])
+    trust_ratio = trusted_count / len(evidence_items)
+    if trust_ratio >= 0.8:
+        return "High", trusted_count, len(evidence_items)
+    if trust_ratio >= 0.4:
+        return "Medium", trusted_count, len(evidence_items)
+    return "Low", trusted_count, len(evidence_items)
+
+
+def build_blocker_summary(critical_open, ps5_ps7_open, open_items, evidence_level, trusted_count, evidence_count):
+    if critical_open:
+        item = critical_open[0]
+        return f"Critical unresolved {item.standard} controversy: community or worker feedback contradicts the report claim on {item.topic}."
+    if ps5_ps7_open:
+        item = ps5_ps7_open[0]
+        return f"Open {item.standard} controversy requires manual verification before lender reliance on the report claim."
+    if evidence_count and evidence_level != "High":
+        return f"Only {trusted_count} of {evidence_count} evidence records are verified. Filed evidence is not treated as verified."
+    if open_items:
+        return "Open controversies remain and should be resolved before final lender reliance."
+    return "No unresolved trust blocker is currently preventing lender review."
+
+
+def build_required_next_steps(critical_open, ps5_ps7_open, open_items, evidence_level):
+    steps = []
+    if critical_open:
+        steps.append("Resolve critical controversy flags and record manual verification notes.")
+    if ps5_ps7_open:
+        steps.append("Verify PS5/PS7 compensation, land, Indigenous Peoples, or consultation claims with affected people.")
+    if open_items:
+        steps.append("Close or dismiss remaining controversy flags with documented evidence.")
+    if evidence_level != "High":
+        steps.append("Convert filed evidence to verified evidence through lender/consultant review.")
+    if not steps:
+        steps.append("Proceed to lender review with ongoing audit-log monitoring.")
+    return " ".join(steps)
+
+
 def build_lender_trust_report(db: Session, project_id: str):
     controversies = db.query(ControversyFlag).filter(ControversyFlag.project_id == project_id).all()
+    evidence_items = db.query(EvidenceItem).filter(EvidenceItem.project_id == project_id).all()
     responses = db.query(ValidationResponse).filter(ValidationResponse.project_id == project_id).all()
     community = [item for item in responses if item.respondent_type in {"community", "both"}]
     worker = [item for item in responses if item.respondent_type in {"worker", "both"}]
     open_items = [item for item in controversies if item.status not in {"resolved", "dismissed"}]
     critical_open = [item for item in open_items if item.severity == "Critical"]
+    ps5_ps7_open = [item for item in open_items if item.standard in {"PS5", "PS7"}]
+    evidence_level, trusted_evidence_count, evidence_count = evidence_trust(evidence_items)
 
     community_score = validation_score(community)
     worker_score = validation_score(worker)
     manual_score = max(0, 100 - len(open_items) * 12)
-    document_score = 70
+    document_score = 70 if evidence_level == "Low" else 78 if evidence_level == "Medium" else 86
     final_score = round(
         document_score * 0.4
         + (community_score if community_score is not None else 70) * 0.25
@@ -245,13 +290,31 @@ def build_lender_trust_report(db: Session, project_id: str):
         + manual_score * 0.15
     )
     final_risk = "High" if critical_open else "Medium" if open_items else "Low"
-    recommendation = "Ready for lender review"
+    if critical_open:
+        financing_gate = "Do not finance until resolved"
+    elif ps5_ps7_open:
+        financing_gate = "Manual verification required"
+    elif evidence_count and trusted_evidence_count < evidence_count:
+        financing_gate = "Conditional review"
+    else:
+        financing_gate = "Ready for lender review"
+
+    recommendation = financing_gate
     if critical_open:
         recommendation = "High risk: unresolved community/worker contradictions"
     elif open_items:
         recommendation = "Manual verification required before financing"
-    elif final_score < 75:
+    elif financing_gate == "Conditional review" or final_score < 75:
         recommendation = "Conditional review after evidence update"
+    blocker_summary = build_blocker_summary(
+        critical_open,
+        ps5_ps7_open,
+        open_items,
+        evidence_level,
+        trusted_evidence_count,
+        evidence_count,
+    )
+    required_next_steps = build_required_next_steps(critical_open, ps5_ps7_open, open_items, evidence_level)
 
     report = LenderTrustReport(
         project_id=project_id,
@@ -263,6 +326,10 @@ def build_lender_trust_report(db: Session, project_id: str):
         summary="Trust report combines document claims, community/worker feedback, and manual verification status.",
         unresolved_controversies_count=len(open_items),
         funding_recommendation=recommendation,
+        financing_gate=financing_gate,
+        blocker_summary=blocker_summary,
+        required_next_steps=required_next_steps,
+        evidence_trust_level=evidence_level,
     )
     db.add(report)
     db.flush()

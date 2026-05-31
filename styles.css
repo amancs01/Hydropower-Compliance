@@ -382,6 +382,37 @@
   margin-bottom: 16px;
 }
 
+.financing-gate-panel {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 14px;
+  border-color: #fecaca;
+  background: #fff7ed;
+}
+
+.financing-gate-panel span {
+  color: #991b1b;
+  font-size: 0.78rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.financing-gate-panel strong {
+  color: #111827;
+  font-family: var(--heading-font);
+  font-size: 2rem;
+  line-height: 1.1;
+}
+
+.financing-gate-panel p {
+  max-width: 780px;
+  color: #334155;
+}
+
+.lender-strict-language {
+  margin-bottom: 16px;
+}
+
 .lender-memo div {
   padding: 18px;
   border: 1px solid var(--line);

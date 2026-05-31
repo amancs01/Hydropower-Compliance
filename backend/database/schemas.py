@@ -139,3 +139,20 @@ class ManualVerificationNoteCreate(BaseModel):
     evidence_received: Optional[str] = None
     decision: str
     notes: Optional[str] = None
+
+
+class LenderTrustReportOutput(BaseModel):
+    id: str
+    project_id: str
+    community_validation_score: Optional[int] = None
+    worker_validation_score: Optional[int] = None
+    manual_verification_score: Optional[int] = None
+    final_trust_score: int
+    final_risk_level: str
+    summary: str
+    unresolved_controversies_count: int = 0
+    funding_recommendation: str
+    financing_gate: str
+    blocker_summary: Optional[str] = None
+    required_next_steps: Optional[str] = None
+    evidence_trust_level: str

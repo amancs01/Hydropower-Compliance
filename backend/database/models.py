@@ -460,4 +460,8 @@ class LenderTrustReport(Base):
     summary = Column(Text, nullable=False)
     unresolved_controversies_count = Column(Integer, default=0)
     funding_recommendation = Column(Text, nullable=False)
+    financing_gate = Column(String(100), nullable=False, default="Manual verification required")
+    blocker_summary = Column(Text, nullable=True)
+    required_next_steps = Column(Text, nullable=True)
+    evidence_trust_level = Column(String(50), nullable=False, default="Low")
     created_at = Column(DateTime, default=datetime.utcnow)
