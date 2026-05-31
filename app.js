@@ -553,6 +553,26 @@ function fetchProjectEvidence(projectId) {
   return apiGet(`/api/projects/${projectId}/evidence`);
 }
 
+async function uploadEvidenceFile(projectId, formData) {
+  await ensureDemoLogin(state.role);
+  const response = await fetch(`${API_BASE_URL}/api/projects/${encodeURIComponent(projectId)}/evidence/upload`, {
+    method: "POST",
+    headers: authHeaders(),
+    body: formData
+  });
+  if (!response.ok) {
+    let message = "Evidence upload failed.";
+    try {
+      const body = await response.json();
+      message = body.message || body.detail?.message || message;
+    } catch {
+      // Keep the default message when the backend does not return JSON.
+    }
+    throw new Error(message);
+  }
+  return response.json();
+}
+
 async function updateEvidenceStatusBackend(projectId, evidenceId, status) {
   await ensureDemoLogin(state.role);
   const response = await fetch(`${API_BASE_URL}/api/projects/${encodeURIComponent(projectId)}/evidence/${encodeURIComponent(evidenceId)}/status`, {
@@ -788,9 +808,10 @@ function mapBackendEvidence(item) {
     uploadedBy: item.uploaded_by || "Demo team",
     verifiedBy: item.verified_by || "",
     originalFilename: item.original_filename || item.source || "",
-    fileSize: item.file_size || null,
+    fileSize: item.file_size_bytes || item.file_size || null,
     mimeType: item.mime_type || "",
     sha256Hash: item.sha256_hash || "",
+    verificationNote: item.verification_note || "",
     uploadedAt: item.uploaded_at || item.created_at || ""
   };
 }
@@ -936,6 +957,10 @@ function average(scores) {
 
 function canReviewEvidence() {
   return reviewerRoles.has(state.role);
+}
+
+function canUploadEvidence() {
+  return ["Developer", "Consultant", "Admin"].includes(backendRole(state.role));
 }
 
 function canViewConfidentialGrievance(item) {
@@ -3393,15 +3418,60 @@ async function updateEvidenceStatus(item, status) {
   }
 }
 
+async function refreshTrustReportAfterEvidenceChange() {
+  try {
+    const trustReport = await fetchLenderTrustReport(state.selectedProjectId);
+    state.lenderTrustReports = [
+      ...state.lenderTrustReports.filter((report) => (report.project_id || report.projectId) !== state.selectedProjectId),
+      trustReport
+    ];
+  } catch {
+    // Some upload roles cannot view lender reports; the lender view will rebuild a fresh report when opened.
+  }
+}
+
+async function handleEvidenceUpload(form) {
+  const fileInput = form.querySelector("[name='file']");
+  if (!fileInput?.files?.length) {
+    toast("Choose an evidence file before uploading.");
+    return;
+  }
+  const values = form.elements;
+  const formData = new FormData();
+  formData.append("file", fileInput.files[0]);
+  formData.append("standard", values.namedItem("standard").value);
+  formData.append("evidence_type", values.namedItem("evidence_type").value.trim());
+  formData.append("title", values.namedItem("title").value.trim());
+  formData.append("summary", values.namedItem("summary").value.trim());
+  formData.append("confidential", values.namedItem("confidential").checked ? "true" : "false");
+
+  try {
+    const result = await uploadEvidenceFile(state.selectedProjectId, formData);
+    const uploadedEvidence = mapBackendEvidence(result.evidence);
+    state.evidence = [
+      ...state.evidence.filter((item) => item.id !== uploadedEvidence.id),
+      uploadedEvidence
+    ];
+    await refreshTrustReportAfterEvidenceChange();
+    saveState();
+    render();
+    toast(result.message || "Evidence uploaded as filed. Verification required before lender trust.");
+  } catch (error) {
+    toast(error.message || "Evidence upload failed. Please try again.");
+  }
+}
+
 function renderEvidence() {
   const reviewDisabled = canReviewEvidence() ? "" : "disabled";
   const reviewHint = canReviewEvidence() ? "" : ` title="${escapeHtml(state.role)} cannot verify evidence in this demo"`;
+  const uploadDisabled = canUploadEvidence() ? "" : "disabled";
+  const uploadHint = canUploadEvidence() ? "" : ` title="${escapeHtml(state.role)} cannot upload evidence"`;
   {
     const items = projectItems("evidence");
     const filters = ["All", "Verified", "Filed", "Under review", "Expired", "Disputed", "Missing", "Confidential"];
     const tableRows = items.map((item) => `
       <tr>
-        <td><strong>${escapeHtml(item.evidenceType)}</strong>${accordion("Snippet", `<p>${escapeHtml(item.summary)}</p>`)}</td>
+        <td><strong>${escapeHtml(item.evidenceType)}</strong><br><small>${escapeHtml(item.originalFilename || item.title || "No file recorded")}</small>${accordion("Snippet", `<p>${escapeHtml(item.summary)}</p>`)}</td>
         <td>${escapeHtml(item.linkedStandard)}</td>
         <td>${escapeHtml(item.source)}</td>
         <td><span title="${escapeHtml(item.sha256Hash || "No hash recorded")}">${escapeHtml(shortHash(item.sha256Hash))}</span><br><small>${escapeHtml(formatFileSize(item.fileSize))}</small></td>
@@ -3419,6 +3489,35 @@ function renderEvidence() {
       <section class="panel compact-note">
         <strong>Filed != Verified.</strong>
         <span>Lenders trust only reviewed evidence.</span>
+      </section>
+      <section class="panel">
+        <div class="panel-header compact"><div><h3>Upload evidence file</h3><p>New uploads are filed until an authorized reviewer verifies them.</p></div></div>
+        <form class="form-grid evidence-upload-form" data-evidence-upload-form>
+          <div class="field">
+            <label for="evidenceUploadStandard">Standard</label>
+            <select id="evidenceUploadStandard" name="standard" required ${uploadDisabled}${uploadHint}>
+              ${standards.map((standard) => `<option value="${standard.code}">${standard.code}</option>`).join("")}
+            </select>
+          </div>
+          <div class="field">
+            <label for="evidenceUploadType">Evidence type</label>
+            <input id="evidenceUploadType" name="evidence_type" placeholder="Monitoring report" required ${uploadDisabled}${uploadHint} />
+          </div>
+          <div class="field">
+            <label for="evidenceUploadTitle">Title</label>
+            <input id="evidenceUploadTitle" name="title" placeholder="Water quality results" required ${uploadDisabled}${uploadHint} />
+          </div>
+          <div class="field">
+            <label for="evidenceUploadFile">File</label>
+            <input id="evidenceUploadFile" name="file" type="file" required ${uploadDisabled}${uploadHint} />
+          </div>
+          <div class="field full">
+            <label for="evidenceUploadSummary">Summary</label>
+            <textarea id="evidenceUploadSummary" name="summary" placeholder="Optional note for reviewers" ${uploadDisabled}${uploadHint}></textarea>
+          </div>
+          <label class="checkbox-row"><input name="confidential" type="checkbox" ${uploadDisabled}${uploadHint} /> Confidential</label>
+          <div class="toolbar"><button class="btn primary" type="submit" ${uploadDisabled}${uploadHint}>Upload</button></div>
+        </form>
       </section>
       <section class="panel">
         ${filterTabs(filters)}
@@ -3445,6 +3544,14 @@ function renderEvidence() {
         if (!item) return;
         await updateEvidenceStatus(item, status);
       });
+    });
+    document.querySelector("[data-evidence-upload-form]")?.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      if (!canUploadEvidence()) {
+        toast(`${state.role} cannot upload evidence. Switch to Developer, Consultant, or Admin.`);
+        return;
+      }
+      await handleEvidenceUpload(event.currentTarget);
     });
     bindProjectRoomControls();
     return;

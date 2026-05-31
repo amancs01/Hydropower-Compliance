@@ -1834,6 +1834,14 @@ textarea:focus-visible {
   grid-column: 1 / -1;
 }
 
+.evidence-upload-form textarea {
+  min-height: 92px;
+}
+
+.evidence-upload-form .checkbox-row {
+  align-self: end;
+}
+
 .file-status {
   margin-top: 8px;
   color: var(--muted);

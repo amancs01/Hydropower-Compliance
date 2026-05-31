@@ -363,11 +363,15 @@ def ensure_seed_schema():
         if "evidence_items" in inspector.get_table_names():
             evidence_columns = {column["name"] for column in inspector.get_columns("evidence_items")}
             for column_name, column_type in {
+                "file_path": "TEXT",
                 "original_filename": "VARCHAR(255)",
                 "file_size": "INTEGER",
+                "file_size_bytes": "INTEGER",
                 "mime_type": "VARCHAR(255)",
                 "sha256_hash": "VARCHAR(64)",
                 "uploaded_at": "DATETIME",
+                "uploaded_by": "VARCHAR(255)",
+                "verification_note": "TEXT",
             }.items():
                 if column_name not in evidence_columns:
                     connection.execute(text(f"ALTER TABLE evidence_items ADD COLUMN {column_name} {column_type}"))
