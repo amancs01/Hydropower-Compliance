@@ -230,7 +230,7 @@ def validation_score(responses):
 def evidence_trust(evidence_items):
     if not evidence_items:
         return "Low", 0, 0
-    trusted_count = len([item for item in evidence_items if item.status == "Verified"])
+    trusted_count = len([item for item in evidence_items if str(item.status or "").lower() == "verified"])
     trust_ratio = trusted_count / len(evidence_items)
     if trust_ratio >= 0.8:
         return "High", trusted_count, len(evidence_items)

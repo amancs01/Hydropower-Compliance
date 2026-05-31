@@ -553,6 +553,21 @@ function fetchProjectEvidence(projectId) {
   return apiGet(`/api/projects/${projectId}/evidence`);
 }
 
+async function updateEvidenceStatusBackend(projectId, evidenceId, status) {
+  await ensureDemoLogin(state.role);
+  const response = await fetch(`${API_BASE_URL}/api/projects/${encodeURIComponent(projectId)}/evidence/${encodeURIComponent(evidenceId)}/status`, {
+    method: "PATCH",
+    headers: authHeaders({ "Content-Type": "application/json" }),
+    body: JSON.stringify({
+      status,
+      verified_by: backendRole(state.role),
+      verification_note: `Evidence marked ${status} from the ${state.role} portal.`
+    })
+  });
+  if (!response.ok) throw new Error("Evidence status update failed.");
+  return response.json();
+}
+
 function fetchProjectGrievances(projectId) {
   return apiGet(`/api/projects/${projectId}/grievances`);
 }
@@ -3349,6 +3364,35 @@ function whyScore(code, score, findings, evidenceItems) {
   return "Green because core evidence is available and no high-severity open gap is linked to this standard.";
 }
 
+function applyLocalEvidenceStatus(item, status) {
+  item.status = status;
+  item.verifiedBy = status === "Verified" ? state.role : "";
+  state.auditLogs.unshift(audit(`Evidence ${status.toLowerCase()}`, `${item.evidenceType} marked ${status} by ${state.role}.`, state.role, new Date().toISOString()));
+  recalculateScores();
+}
+
+async function updateEvidenceStatus(item, status) {
+  try {
+    const result = await updateEvidenceStatusBackend(state.selectedProjectId, item.id, status);
+    const updatedEvidence = mapBackendEvidence(result.evidence);
+    state.evidence = state.evidence.map((evidenceItem) => evidenceItem.id === item.id ? updatedEvidence : evidenceItem);
+    if (result.trust_report) {
+      state.lenderTrustReports = [
+        ...state.lenderTrustReports.filter((report) => (report.project_id || report.projectId) !== state.selectedProjectId),
+        result.trust_report
+      ];
+    }
+    saveState();
+    render();
+    toast(`Evidence marked ${status}. Lender trust report refreshed.`);
+  } catch {
+    applyLocalEvidenceStatus(item, status);
+    saveState();
+    render();
+    toast(`Warning: backend update failed. Evidence marked ${status} locally only.`);
+  }
+}
+
 function renderEvidence() {
   const reviewDisabled = canReviewEvidence() ? "" : "disabled";
   const reviewHint = canReviewEvidence() ? "" : ` title="${escapeHtml(state.role)} cannot verify evidence in this demo"`;
@@ -3391,20 +3435,15 @@ function renderEvidence() {
       </section>
     `;
     document.querySelectorAll("[data-evidence-status]").forEach((button) => {
-      button.addEventListener("click", () => {
+      button.addEventListener("click", async () => {
         if (!canReviewEvidence()) {
           toast(`${state.role} cannot verify evidence. Switch to Lender, Consultant, or Reviewer.`);
           return;
         }
         const [id, status] = button.dataset.evidenceStatus.split(":");
         const item = state.evidence.find((evidenceItem) => evidenceItem.id === id);
-        item.status = status;
-        item.verifiedBy = status === "Verified" ? state.role : "";
-        state.auditLogs.unshift(audit(`Evidence ${status.toLowerCase()}`, `${item.evidenceType} marked ${status} by ${state.role}.`, state.role, new Date().toISOString()));
-        recalculateScores();
-        saveState();
-        render();
-        toast(`Evidence marked ${status}. Score explanation updated.`);
+        if (!item) return;
+        await updateEvidenceStatus(item, status);
       });
     });
     bindProjectRoomControls();
@@ -3483,20 +3522,15 @@ function renderEvidence() {
   `;
 
   document.querySelectorAll("[data-evidence-status]").forEach((button) => {
-    button.addEventListener("click", () => {
+    button.addEventListener("click", async () => {
       if (!canReviewEvidence()) {
         toast(`${state.role} cannot verify evidence. Switch to Lender, Consultant, or Reviewer.`);
         return;
       }
       const [id, status] = button.dataset.evidenceStatus.split(":");
       const item = state.evidence.find((evidenceItem) => evidenceItem.id === id);
-      item.status = status;
-      item.verifiedBy = status === "Verified" ? state.role : "";
-      state.auditLogs.unshift(audit(`Evidence ${status.toLowerCase()}`, `${item.evidenceType} marked ${status} by ${state.role}.`, state.role, new Date().toISOString()));
-      recalculateScores();
-      saveState();
-      render();
-      toast(`Evidence marked ${status}. Score explanation updated.`);
+      if (!item) return;
+      await updateEvidenceStatus(item, status);
     });
   });
 }

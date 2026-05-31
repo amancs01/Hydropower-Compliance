@@ -6,7 +6,6 @@ from database.models import (
     ControversyFlag,
     AuditLog,
     Grievance,
-    LenderTrustReport,
     ManualVerificationNote,
     ManualVerificationTask,
     Project,
@@ -257,25 +256,18 @@ def get_lender_trust_report(
     db: Session = Depends(get_db),
     user=Depends(require_roles(["Lender", "Consultant", "Regulator", "Admin"])),
 ):
-    report = (
-        db.query(LenderTrustReport)
-        .filter(LenderTrustReport.project_id == project_id)
-        .order_by(LenderTrustReport.created_at.desc())
-        .first()
-    )
-    if not report:
-        report = build_lender_trust_report(db, project_id)
-        db.add(AuditLog(
-            project_id=project_id,
-            actor="HydroComply trust engine",
-            actor_role="System",
-            action="Lender trust report generated",
-            entity_type="lender_trust_report",
-            entity_id=report.id,
-            detail=f"{report.unresolved_controversies_count} unresolved controversies included.",
-        ))
-        db.commit()
-        db.refresh(report)
+    report = build_lender_trust_report(db, project_id)
+    db.add(AuditLog(
+        project_id=project_id,
+        actor="HydroComply trust engine",
+        actor_role="System",
+        action="Lender trust report generated",
+        entity_type="lender_trust_report",
+        entity_id=report.id,
+        detail=f"{report.unresolved_controversies_count} unresolved controversies included.",
+    ))
+    db.commit()
+    db.refresh(report)
     return row_to_dict(report)
 
 

@@ -63,6 +63,12 @@ class EvidenceCreate(BaseModel):
     confidential: bool = False
 
 
+class EvidenceStatusUpdate(BaseModel):
+    status: str
+    verified_by: Optional[str] = None
+    verification_note: Optional[str] = None
+
+
 class GrievanceCreate(BaseModel):
     submitted_by: str = "Anonymous"
     anonymous: bool = True
