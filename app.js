@@ -150,7 +150,10 @@ const initialState = {
   controversies: [],
   manualTasks: [],
   lenderTrustReports: [],
-  reportClaims: []
+  reportClaims: [],
+  documents: [],
+  mergedCompliance: {},
+  scoreHistory: {}
 };
 
 let state = loadState();
@@ -161,7 +164,7 @@ let latestComplianceAnalysis = null;
 let projectFilter = "all";
 let validationFlow = {
   step: "screening",
-  projectId: state.selectedProjectId,
+  projectId: new URLSearchParams(window.location.search).get("project_id") || state.selectedProjectId,
   respondentConnection: "",
   respondentType: "community",
   questionSet: "community",
@@ -171,6 +174,7 @@ let validationFlow = {
   loading: false,
   receipt: null
 };
+let statusLookupResult = null;
 
 const reviewerRoles = new Set(["Lender", "Lender / Investor", "Consultant", "Reviewer", "Regulator / Reviewer"]);
 
@@ -361,6 +365,9 @@ function loadState() {
     nextState.manualTasks = parsed.manualTasks || initialState.manualTasks;
     nextState.lenderTrustReports = parsed.lenderTrustReports || initialState.lenderTrustReports;
     nextState.reportClaims = parsed.reportClaims || initialState.reportClaims;
+    nextState.documents = parsed.documents || initialState.documents;
+    nextState.mergedCompliance = parsed.mergedCompliance || initialState.mergedCompliance;
+    nextState.scoreHistory = parsed.scoreHistory || initialState.scoreHistory;
     if (!nextState.projects.some((item) => item.id === nextState.selectedProjectId)) {
       nextState.selectedProjectId = initialState.selectedProjectId;
     }
@@ -464,6 +471,20 @@ function fetchReportClaims(projectId) {
   return apiGet(`/api/projects/${encodeURIComponent(projectId)}/report-claims`);
 }
 
+function fetchProjectDocuments(projectId) {
+  return apiGet(`/api/projects/${encodeURIComponent(projectId)}/documents`);
+}
+
+function fetchMergedCompliance(projectId) {
+  return apiGet(`/api/projects/${encodeURIComponent(projectId)}/compliance/merged`);
+}
+
+async function fetchPublicStatus(referenceNumber) {
+  const response = await fetch(`${API_BASE_URL}/api/public/status/${encodeURIComponent(referenceNumber)}`);
+  if (!response.ok) throw new Error("Status lookup failed.");
+  return response.json();
+}
+
 async function addManualTaskNote(taskId, payload) {
   const response = await fetch(`${API_BASE_URL}/api/manual-verification-tasks/${encodeURIComponent(taskId)}/notes`, {
     method: "POST",
@@ -477,11 +498,14 @@ async function addManualTaskNote(taskId, payload) {
 async function loadVerificationData(projectId = state.selectedProjectId) {
   try {
     await ensureDemoLogin(state.role);
-    const [controversies, manualTasks, trustReport, reportClaims] = await Promise.all([
+    const [controversies, manualTasks, trustReport, reportClaims, mergedCompliance, documents, scoreHistory] = await Promise.all([
       fetchControversies(projectId),
       fetchManualTasks(projectId),
       fetchLenderTrustReport(projectId),
-      fetchReportClaims(projectId)
+      fetchReportClaims(projectId),
+      fetchMergedCompliance(projectId),
+      fetchProjectDocuments(projectId),
+      fetchProjectScoreHistory(projectId)
     ]);
     state.controversies = [
       ...state.controversies.filter((item) => item.project_id !== projectId && item.projectId !== projectId),
@@ -499,6 +523,13 @@ async function loadVerificationData(projectId = state.selectedProjectId) {
       ...state.reportClaims.filter((item) => item.project_id !== projectId && item.projectId !== projectId),
       ...reportClaims.map((item) => ({ ...item, project_id: projectId }))
     ];
+    state.documents = [
+      ...state.documents.filter((item) => item.project_id !== projectId && item.projectId !== projectId),
+      ...documents.map(mapBackendDocument)
+    ];
+    state.mergedCompliance[projectId] = mergedCompliance;
+    state.scoreHistory[projectId] = normalizeScoreHistory(scoreHistory);
+    state.scores[projectId] = scoreFromMergedCompliance(mergedCompliance) || state.scores[projectId];
     saveState();
     render();
   } catch {
@@ -570,15 +601,17 @@ async function loadBackendProjectData() {
     await ensureDemoLogin(state.role);
 
     const details = await Promise.all(projects.map(async (projectItem) => {
-      const [findings, evidence, grievances, actions, auditLogs, scoreHistory] = await Promise.all([
+      const [findings, evidence, grievances, actions, auditLogs, scoreHistory, documents, mergedCompliance] = await Promise.all([
         optionalBackendList(() => fetchProjectFindings(projectItem.id)),
         optionalBackendList(() => fetchProjectEvidence(projectItem.id)),
         optionalBackendList(() => fetchProjectGrievances(projectItem.id)),
         optionalBackendList(() => fetchProjectActions(projectItem.id)),
         optionalBackendList(() => fetchProjectAudit(projectItem.id)),
-        optionalBackendList(() => fetchProjectScoreHistory(projectItem.id))
+        fetchProjectScoreHistory(projectItem.id).catch(() => ({ project_id: projectItem.id, snapshots: [] })),
+        optionalBackendList(() => fetchProjectDocuments(projectItem.id)),
+        fetchMergedCompliance(projectItem.id).catch(() => null)
       ]);
-      return { projectItem, findings, evidence, grievances, actions, auditLogs, scoreHistory };
+      return { projectItem, findings, evidence, grievances, actions, auditLogs, scoreHistory, documents, mergedCompliance };
     }));
 
     state.scores = {};
@@ -587,14 +620,20 @@ async function loadBackendProjectData() {
     state.grievances = [];
     state.actions = [];
     state.auditLogs = [];
+    state.documents = [];
+    state.mergedCompliance = {};
+    state.scoreHistory = {};
 
-    details.forEach(({ projectItem, findings, evidence, grievances, actions, auditLogs, scoreHistory }) => {
-      state.scores[projectItem.id] = mapBackendScore(projectItem, scoreHistory);
+    details.forEach(({ projectItem, findings, evidence, grievances, actions, auditLogs, scoreHistory, documents, mergedCompliance }) => {
+      state.scoreHistory[projectItem.id] = normalizeScoreHistory(scoreHistory);
+      if (mergedCompliance) state.mergedCompliance[projectItem.id] = mergedCompliance;
+      state.scores[projectItem.id] = scoreFromMergedCompliance(mergedCompliance) || mapBackendScore(projectItem, state.scoreHistory[projectItem.id]);
       state.findings.push(...findings.map(mapBackendFinding));
       state.evidence.push(...evidence.map(mapBackendEvidence));
       state.grievances.push(...grievances.map(mapBackendGrievance));
       state.actions.push(...actions.map(mapBackendAction));
       state.auditLogs.push(...auditLogs.map(mapBackendAudit));
+      state.documents.push(...documents.map(mapBackendDocument));
     });
 
     saveState();
@@ -653,7 +692,8 @@ function mapBackendProject(projectItem) {
 }
 
 function mapBackendScore(projectItem, scoreHistory = []) {
-  const latest = projectItem.latest_score || scoreHistory[scoreHistory.length - 1] || {};
+  const normalizedHistory = normalizeScoreHistory(scoreHistory);
+  const latest = projectItem.latest_score || normalizedHistory[normalizedHistory.length - 1] || {};
   const isPendingScore = projectItem.baseline_status === "baseline_pending"
     || latest.risk_level === "baseline_pending"
     || latest.overall_score === null
@@ -669,6 +709,38 @@ function mapBackendScore(projectItem, scoreHistory = []) {
     PS6: latest.ps6_score ?? null,
     PS7: latest.ps7_score ?? 50,
     PS8: latest.ps8_score ?? null
+  };
+}
+
+function normalizeScoreHistory(value = []) {
+  if (Array.isArray(value)) return value;
+  if (Array.isArray(value.snapshots)) return value.snapshots;
+  return [];
+}
+
+function scoreFromMergedCompliance(merged) {
+  if (!merged?.standards?.length) return null;
+  const scores = {};
+  let hasAnyScore = false;
+  merged.standards.forEach((item) => {
+    scores[item.standard] = item.score ?? null;
+    if (Number.isFinite(item.score)) hasAnyScore = true;
+  });
+  return hasAnyScore ? scores : null;
+}
+
+function mapBackendDocument(item) {
+  return {
+    id: item.id,
+    projectId: item.project_id,
+    project_id: item.project_id,
+    filename: item.filename || item.original_filename || "Uploaded document",
+    documentType: item.document_type || "Project document",
+    pages: item.pages || 0,
+    textLength: item.text_length || 0,
+    containsNepali: Boolean(item.contains_nepali),
+    uploadStatus: item.upload_status || "uploaded",
+    uploadedAt: item.uploaded_at || item.created_at || ""
   };
 }
 
@@ -746,6 +818,8 @@ function mapBackendAction(item) {
 function mapBackendAudit(item) {
   return {
     id: item.id,
+    projectId: item.project_id,
+    project_id: item.project_id,
     entityType: item.entity_type,
     entityId: item.entity_id,
     actor: item.actor,
@@ -826,7 +900,7 @@ function severityClass(value) {
 }
 
 function projectItems(collection) {
-  return state[collection].filter((item) => item.projectId === state.selectedProjectId);
+  return state[collection].filter((item) => (item.project_id || item.projectId) === state.selectedProjectId);
 }
 
 function roleKey(role = state.role) {
@@ -1314,7 +1388,7 @@ function renderValidationPortal() {
     return `<section class="community-public validation-public"><header class="community-public-header"><button class="btn" type="button" data-community-home>Back to HydroComply</button></header><main class="validation-shell"><section class="validation-card receipt-card"><p class="eyebrow">Validation received</p><h2>Your validation response has been received.</h2><p>Reference number: <strong>${escapeHtml(validationFlow.receipt.reference_number)}</strong></p><p>Your response may be used to compare project reports with ground-level feedback.</p><button class="btn primary" type="button" data-validation-reset>Submit another response</button></section></main></section>`;
   }
   if (validationFlow.step === "screening") {
-    return `<section class="community-public validation-public"><header class="community-public-header"><button class="btn" type="button" data-community-home>Back to HydroComply</button><span>English / Nepali</span></header><main class="validation-shell"><section class="validation-card"><p class="eyebrow">Ground-truth validation</p><h2>Help verify what project reports say.</h2><p>Choose a project and answer the questionnaire that matches your connection. You can stay anonymous.</p><div class="field"><label for="validationProject">Hydropower project</label><select id="validationProject">${state.projects.map((item) => `<option value="${item.id}" ${item.id === validationFlow.projectId ? "selected" : ""}>${escapeHtml(item.name)}</option>`).join("")}</select></div><div class="field"><label for="validationConnection">How are you connected to this project?</label><select id="validationConnection">${["Affected landowner", "Nearby resident", "Indigenous community member", "Downstream water user", "Local business", "Worker", "Contractor worker", "Former worker", "Other"].map((item) => `<option>${item}</option>`).join("")}</select></div><div class="field" id="validationFollowupWrap"><label for="validationFollowup">If other, select the closest topic</label><select id="validationFollowup"><option>Community impact</option><option>Working conditions</option><option>Both</option></select></div><button class="btn primary" type="button" data-validation-start>Continue</button></section></main></section>`;
+    return `<section class="community-public validation-public"><header class="community-public-header"><button class="btn" type="button" data-community-home>Back to HydroComply</button><span>English / Nepali</span></header><main class="validation-shell"><section class="validation-card"><p class="eyebrow">Ground-truth validation</p><h2>Help verify what project reports say.</h2><p>Choose a project and answer the questionnaire that matches your connection. You can stay anonymous.</p><div class="field"><label for="validationProject">Hydropower project</label><select id="validationProject">${state.projects.map((item) => `<option value="${item.id}" ${item.id === validationFlow.projectId ? "selected" : ""}>${escapeHtml(item.name)}</option>`).join("")}</select></div><div class="field"><label for="validationConnection">How are you connected to this project?</label><select id="validationConnection">${["Affected landowner", "Nearby resident", "Indigenous community member", "Downstream water user", "Local business", "Worker", "Contractor worker", "Former worker", "Other"].map((item) => `<option>${item}</option>`).join("")}</select></div><div class="field" id="validationFollowupWrap"><label for="validationFollowup">If other, select the closest topic</label><select id="validationFollowup"><option>Community impact</option><option>Working conditions</option><option>Both</option></select></div><button class="btn primary" type="button" data-validation-start>Continue</button></section>${renderStatusLookupCard()}</main></section>`;
   }
   if (validationFlow.loading) {
     return `<section class="community-public validation-public"><header class="community-public-header"><button class="btn" type="button" data-community-home>Back</button></header><main class="validation-shell"><section class="validation-card"><h2>Loading validation questions...</h2><p>Please wait while HydroComply prepares the questionnaire.</p></section></main></section>`;
@@ -1323,6 +1397,15 @@ function renderValidationPortal() {
     return `<section class="community-public validation-public"><header class="community-public-header"><button class="btn" type="button" data-community-home>Back to HydroComply</button><span>${escapeHtml(project.name)}</span></header><main class="validation-shell"><section class="validation-card"><p class="eyebrow">Review response</p><h2>Check your answers before submitting.</h2><div class="validation-review">${validationFlow.questions.map((question) => `<article><strong>${escapeHtml(question.question_text)}</strong><p>${escapeHtml(validationFlow.answers[question.id]?.answer || "")}</p>${validationFlow.answers[question.id]?.follow_up_text ? `<small>${escapeHtml(validationFlow.answers[question.id].follow_up_text)}</small>` : ""}</article>`).join("")}</div><div class="toolbar"><button class="btn" type="button" data-validation-back>Back</button><button class="btn primary" type="button" data-validation-submit>Submit validation</button></div></section></main></section>`;
   }
   return `<section class="community-public validation-public"><header class="community-public-header"><button class="btn" type="button" data-community-home>Back to HydroComply</button><span>${escapeHtml(project.name)}</span></header><main class="validation-shell"><section class="validation-card"><div class="wizard-progress"><span>Section ${validationFlow.sectionIndex + 1} of ${sections.length}</span><strong>${escapeHtml(sections[validationFlow.sectionIndex] || "Questions")}</strong></div><div class="question-stack">${currentQuestions.map((question) => `<article class="question-card"><span>${escapeHtml(question.linked_standard || "IFC")}</span><label>${escapeHtml(question.question_text)}</label>${renderValidationInput(question)}</article>`).join("")}</div><div class="toolbar"><button class="btn" type="button" data-validation-prev ${validationFlow.sectionIndex === 0 ? "disabled" : ""}>Back</button><button class="btn primary" type="button" data-validation-next>${validationFlow.sectionIndex === sections.length - 1 ? "Review" : "Next"}</button></div></section></main></section>`;
+}
+
+function renderStatusLookupCard() {
+  return `<section class="validation-card status-lookup-card"><p class="eyebrow">Check status</p><h2>Check your reference number.</h2><div class="field"><label for="publicStatusReference">Reference number</label><input id="publicStatusReference" placeholder="HCN-MID-2408 or VAL-MIDD-..." /></div><button class="btn primary" type="button" data-status-lookup>Check Status</button><div id="statusLookupResult">${statusLookupResult ? renderStatusLookupResult(statusLookupResult) : ""}</div></section>`;
+}
+
+function renderStatusLookupResult(result) {
+  if (result.status === "error") return `<div class="empty-state compact">${escapeHtml(result.message)}</div>`;
+  return `<article class="status-result"><strong>${escapeHtml(result.reference_number)}</strong><span>${escapeHtml(result.project_name)}</span><p>Status: ${escapeHtml(normalizeStatus(result.status))}</p><p>Category: ${escapeHtml(result.category || result.record_type)}</p><p>Submitted: ${escapeHtml(shortDate(result.submitted_at))}</p><p>${escapeHtml(result.latest_update || "")}</p><small>${escapeHtml(result.next_step || "")}</small></article>`;
 }
 
 function validationCanContinue() {
@@ -1349,6 +1432,17 @@ function bindValidationPortalEvents() {
     renderCommunityPortal();
   });
   document.querySelector("[data-validation-start]")?.addEventListener("click", startValidationQuestionnaire);
+  document.querySelector("[data-status-lookup]")?.addEventListener("click", async () => {
+    const reference = document.querySelector("#publicStatusReference")?.value.trim();
+    if (!reference) return toast("Enter a reference number.");
+    try {
+      statusLookupResult = await fetchPublicStatus(reference);
+    } catch {
+      const local = findLocalStatus(reference);
+      statusLookupResult = local || { status: "error", message: "No record found for this reference number." };
+    }
+    renderCommunityPortal();
+  });
   document.querySelector("#validationConnection")?.addEventListener("change", (event) => {
     document.querySelector("#validationFollowupWrap").hidden = event.target.value !== "Other";
   });
@@ -1379,6 +1473,36 @@ function bindValidationPortalEvents() {
     renderCommunityPortal();
   });
   document.querySelector("[data-validation-submit]")?.addEventListener("click", submitValidationPortal);
+}
+
+function findLocalStatus(reference) {
+  const grievanceItem = state.grievances.find((item) => item.referenceNumber === reference || item.reference_number === reference);
+  if (grievanceItem) {
+    const projectItem = state.projects.find((item) => item.id === grievanceItem.projectId);
+    return {
+      reference_number: reference,
+      record_type: "grievance",
+      project_name: projectItem?.name || "Project",
+      status: grievanceItem.status,
+      category: grievanceItem.category || grievanceItem.aiSummary,
+      submitted_at: grievanceItem.receivedAt,
+      latest_update: "Your concern is under review.",
+      next_step: "Project team must respond."
+    };
+  }
+  const submission = state.validationSubmissions.find((item) => item.referenceNumber === reference || item.reference_number === reference);
+  if (!submission) return null;
+  const projectItem = state.projects.find((item) => item.id === (submission.projectId || submission.project_id));
+  return {
+    reference_number: reference,
+    record_type: "validation_submission",
+    project_name: projectItem?.name || "Project",
+    status: submission.status || "submitted",
+    category: submission.respondent_type || submission.respondentType || "validation",
+    submitted_at: submission.createdAt,
+    latest_update: "Your validation response has been received.",
+    next_step: "Project team must review any contested claims."
+  };
 }
 
 function renderCommunityPortal() {
@@ -1707,6 +1831,34 @@ function renderProjectDirectory(title = "Project Dashboard") {
   `;
 }
 
+function currentScoreHistory() {
+  return normalizeScoreHistory(state.scoreHistory[state.selectedProjectId] || []);
+}
+
+function renderScoreTrendSection(compact = false) {
+  const snapshots = currentScoreHistory().filter((item) => Number.isFinite(Number(item.overall_score)));
+  if (snapshots.length < 2) {
+    return `<section class="panel compliance-trend"><div class="panel-header compact"><div><h3>Compliance Trend</h3><p>Trend will appear after more analyses or verification events.</p></div></div></section>`;
+  }
+  const width = 520;
+  const height = compact ? 150 : 190;
+  const points = snapshots.map((item, index) => {
+    const x = snapshots.length === 1 ? 0 : (index / (snapshots.length - 1)) * width;
+    const y = height - (Number(item.overall_score) / 100) * height;
+    return { x, y, item };
+  });
+  const path = points.map((point, index) => `${index ? "L" : "M"}${point.x.toFixed(1)} ${point.y.toFixed(1)}`).join(" ");
+  return `<section class="panel compliance-trend">
+    <div class="panel-header compact"><div><h3>Compliance Trend</h3><p>Overall score over time from ScoreSnapshot records.</p></div></div>
+    <svg viewBox="0 0 ${width} ${height}" role="img" aria-label="Compliance score trend">
+      <path class="trend-grid" d="M0 ${height * 0.25}H${width}M0 ${height * 0.5}H${width}M0 ${height * 0.75}H${width}" />
+      <path class="trend-line" d="${path}" />
+      ${points.map((point) => `<circle class="trend-dot" cx="${point.x}" cy="${point.y}" r="5"><title>${escapeHtml(point.item.reason_for_change || "Score change")}: ${escapeHtml(point.item.overall_score)}</title></circle>`).join("")}
+    </svg>
+    <div class="trend-events">${snapshots.slice(-4).map((item) => `<span><strong>${escapeHtml(String(item.overall_score))}</strong> ${escapeHtml(item.reason_for_change || "Score snapshot")} <em>${escapeHtml(shortDate(item.created_at))}</em></span>`).join("")}</div>
+  </section>`;
+}
+
 function bindProjectDirectoryControls() {
   document.querySelectorAll("[data-project-filter]").forEach((button) => {
     button.addEventListener("click", () => {
@@ -1789,6 +1941,7 @@ function renderDeveloperDashboard() {
         <article class="score-card warning"><span>Open grievances</span><strong>${metrics.openGrievances}</strong><p>Community cases still active in this project room.</p></article>
         <article class="score-card warning"><span>Overdue actions</span><strong>${metrics.overdueActions}</strong><p>Commitments past their response date.</p></article>
       </section>
+      ${renderScoreTrendSection(true)}
 
       <section class="developer-workspace">
         <div class="panel priority-panel">
@@ -1984,6 +2137,7 @@ function renderLenderDashboard() {
         <article><span>Critical Blockers</span><strong>${blockers.filter((item) => item.severity === "Critical").length} open</strong></article>
         <article><span>Grievance Risk</span><strong>${metrics.highRiskGrievances} high-risk unresolved</strong></article>
       </section>
+      ${renderScoreTrendSection(true)}
       <section class="panel">
         <div class="panel-header"><div><h3>Blocking Issues</h3><p>Read-only finance review of unresolved IFC blockers.</p></div><span class="status-pill status-${Number.isFinite(readiness) ? (readiness >= 75 ? "green" : "red") : "pending"}">${Number.isFinite(readiness) ? (readiness >= 75 ? "Finance-ready" : "Not finance-ready") : "Baseline pending"}</span><button class="btn primary" type="button" data-report-export>Export lender summary</button></div>
         <div class="table-wrap">
@@ -2319,6 +2473,7 @@ function renderAnalyst() {
   const findings = projectItems("findings").filter((item) => item.aiGenerated);
   const evidenceItems = projectItems("evidence");
   const actions = projectItems("actions");
+  const uploadedDocuments = projectItems("documents");
   const textLength = document.querySelector("#docText")?.value?.length || 0;
   const scanScores = latestComplianceAnalysis?.scores || { overall: average(selectedScores()), ps1: selectedScores()?.PS1, ps5: selectedScores()?.PS5, ps7: selectedScores()?.PS7, risk_level: statusForScore(average(selectedScores())) };
   const scanClaims = latestComplianceAnalysis?.report_claims || currentProjectVerification(state.reportClaims);
@@ -2378,6 +2533,17 @@ function renderAnalyst() {
             </div>
           `)}
           ${accordion("View extracted text", `<pre class="raw-output">${escapeHtml(document.querySelector("#docText")?.value || "No extracted text yet.")}</pre>`)}
+        </div>
+      </article>
+
+      <article class="workflow-step panel">
+        <div class="step-label">Docs</div>
+        <div class="workflow-step-body">
+          <div class="panel-header compact">
+            <div><h3>Uploaded Project Documents</h3><p>Each upload remains traceable under the selected project.</p></div>
+            <span class="tag">${uploadedDocuments.length} document(s)</span>
+          </div>
+          ${compactTable(["Document", "Type", "Pages", "Text", "Status"], uploadedDocuments.map((item) => `<tr><td>${escapeHtml(item.filename)}</td><td>${escapeHtml(item.documentType || "Project document")}</td><td>${escapeHtml(item.pages || 0)}</td><td>${Number(item.textLength || 0).toLocaleString()}</td><td>${statusPill(item.uploadStatus || "uploaded", "blue")}</td></tr>`), "No documents uploaded for this project yet.")}
         </div>
       </article>
 
@@ -2667,8 +2833,25 @@ async function runRealAiAnalysis() {
       ...state.reportClaims.filter((item) => item.project_id !== state.selectedProjectId && item.projectId !== state.selectedProjectId),
       ...(latestComplianceAnalysis.report_claims || []).map((item) => ({ ...item, project_id: state.selectedProjectId }))
     ];
+    if (latestComplianceAnalysis.document) {
+      state.documents = [
+        ...state.documents.filter((item) => item.id !== latestComplianceAnalysis.document.id),
+        mapBackendDocument({ ...latestComplianceAnalysis.document, project_id: state.selectedProjectId, document_type: "uploaded_pdf", upload_status: "analyzed" })
+      ];
+    }
+    state.scores[state.selectedProjectId] = {
+      PS1: latestComplianceAnalysis.scores.ps1 ?? null,
+      PS2: latestComplianceAnalysis.scores.ps2 ?? null,
+      PS3: latestComplianceAnalysis.scores.ps3 ?? null,
+      PS4: latestComplianceAnalysis.scores.ps4 ?? null,
+      PS5: latestComplianceAnalysis.scores.ps5 ?? null,
+      PS6: latestComplianceAnalysis.scores.ps6 ?? null,
+      PS7: latestComplianceAnalysis.scores.ps7 ?? null,
+      PS8: latestComplianceAnalysis.scores.ps8 ?? null
+    };
     saveState();
     if (resultNode) resultNode.innerHTML = renderComplianceAnalysisResult(latestComplianceAnalysis);
+    loadVerificationData(state.selectedProjectId);
     toast(`AI compliance analysis complete: ${scoreOrPending(latestComplianceAnalysis.scores.overall)}/100, ${latestComplianceAnalysis.scores.risk_level} risk.`);
   } catch (error) {
     const message = messageForComplianceAnalysisError(error);
@@ -3118,33 +3301,37 @@ function recalculateScores() {
 
 function renderMatrix() {
   const scores = selectedScores();
+  const merged = state.mergedCompliance[state.selectedProjectId];
   const rows = standards.map((standard) => {
-    const score = scores?.[standard.code];
-    const insufficient = scores && score === null;
-    const status = insufficient ? "Insufficient evidence" : statusForScore(score);
+    const mergedRow = merged?.standards?.find((item) => item.standard === standard.code);
+    const score = mergedRow ? mergedRow.score : scores?.[standard.code];
+    const insufficient = mergedRow?.analysis_status === "insufficient_evidence" || (scores && score === null);
+    const status = mergedRow?.analysis_status === "insufficient_evidence" || insufficient ? "Insufficient evidence" : statusForScore(score);
     const standardFindings = projectItems("findings").filter((item) => item.standard === standard.code && item.status !== "Closed");
     const linkedEvidence = projectItems("evidence").filter((item) => item.linkedStandard === standard.code);
-    const topGap = standardFindings[0]?.title || "No open blocker";
+    const topGap = mergedRow?.main_gap || standardFindings[0]?.title || "No open blocker";
     const evidenceStatus = linkedEvidence.length
       ? `${linkedEvidence.filter((item) => item.status === "Verified").length} verified, ${linkedEvidence.filter((item) => item.status !== "Verified").length} pending`
       : "Missing";
+    const source = mergedRow?.source_document_name ? `Source: ${mergedRow.source_document_name}` : "Insufficient evidence: upload supporting document";
     return `
       <tr>
         <td><strong>${standard.code}</strong><span class="muted block">${escapeHtml(standard.name)}</span></td>
         <td>${insufficient ? "Insufficient evidence" : scoreOrPending(score)}</td>
         <td>${statusPill(status, insufficient ? "pending" : status.toLowerCase())}</td>
         <td>${escapeHtml(topGap)}</td>
-        <td>${escapeHtml(evidenceStatus)}</td>
+        <td>${escapeHtml(source)}<span class="muted block">${escapeHtml(evidenceStatus)}</span></td>
         <td><button class="btn" type="button" data-tab-view="evidence">View</button></td>
       </tr>
       <tr class="detail-row">
-        <td colspan="6">${accordion(`${standard.code} details`, `<p>${escapeHtml(whyScore(standard.code, score, standardFindings, linkedEvidence))}</p><p><strong>Required:</strong> ${escapeHtml(standard.evidence)}</p>`)}</td>
+        <td colspan="6">${accordion(`${standard.code} details`, `<p>${escapeHtml(mergedRow?.summary || whyScore(standard.code, score, standardFindings, linkedEvidence))}</p><p><strong>Required:</strong> ${escapeHtml(standard.evidence)}</p>`)}</td>
       </tr>
     `;
   });
   document.querySelector("#matrix").innerHTML = `
     ${projectRoomHeader("matrix")}
     ${pageHeader("PS Matrix", "Check IFC status quickly.", "IFC PS1-PS8")}
+    ${merged ? `<section class="panel compact-note"><strong>Project-level merged compliance.</strong><span>${escapeHtml(merged.coverage_note || "")}</span></section>` : ""}
     ${!scores ? `<section class="pending-baseline-panel"><div><span class="status-pill status-pending">Baseline pending</span><h3>No IFC matrix score yet</h3><p>Report available, AI analysis not yet run. The matrix will populate after PDF extraction and analysis.</p></div><button class="btn primary" type="button" data-matrix-upload>Upload report</button></section>` : ""}
     <section class="panel">${compactTable(["Standard", "Score", "Status", "Main gap", "Evidence status", "Action"], rows, "No matrix rows yet.")}</section>
   `;
@@ -3517,6 +3704,22 @@ function referenceFor(projectId) {
   return `HCN-${prefix}-${Math.floor(2400 + Math.random() * 600)}`;
 }
 
+function validationUrl(projectId = state.selectedProjectId) {
+  const url = new URL(window.location.href);
+  url.search = "";
+  url.hash = "";
+  url.searchParams.set("project_id", projectId);
+  return url.toString();
+}
+
+function renderQrPlaceholder(value) {
+  const bits = Array.from({ length: 121 }, (_, index) => {
+    const char = value.charCodeAt(index % value.length) || 0;
+    return ((char + index * 17) % 5) < 2;
+  });
+  return `<div class="qr-placeholder" aria-label="Validation QR placeholder">${bits.map((on) => `<span class="${on ? "on" : ""}"></span>`).join("")}</div>`;
+}
+
 function routingCard(item) {
   return `
     <article class="card">
@@ -3540,6 +3743,7 @@ function currentProjectVerification(collection) {
 function renderValidationQuestionnaires() {
   const node = document.querySelector("#validation");
   if (!node) return;
+  const link = validationUrl();
   node.innerHTML = `
     ${projectRoomHeader("validation")}
     <div class="split-grid">
@@ -3554,6 +3758,13 @@ function renderValidationQuestionnaires() {
         </div>
         <div class="toolbar"><button class="btn primary" type="button" data-open-validation-portal>Open public validation portal</button></div>
       </article>
+      <article class="panel validation-link-panel">
+        <p class="eyebrow">Validation Link</p>
+        <h3>Project-specific QR access</h3>
+        ${renderQrPlaceholder(link)}
+        <div class="copy-link-row"><input readonly value="${escapeHtml(link)}" /><button class="btn" type="button" data-copy-validation-link>Copy link</button></div>
+        <p class="muted">Post this QR at project sites, ward offices, worker camps, and community meetings.</p>
+      </article>
       <article class="panel">
         <p class="eyebrow">Question routing</p>
         <div class="question-stack compact">
@@ -3565,6 +3776,10 @@ function renderValidationQuestionnaires() {
     </div>
   `;
   node.querySelector("[data-open-validation-portal]")?.addEventListener("click", () => navigate("community"));
+  node.querySelector("[data-copy-validation-link]")?.addEventListener("click", () => {
+    navigator.clipboard?.writeText(link);
+    toast("Validation link copied.");
+  });
 }
 
 function renderControversyCenter() {
@@ -3656,6 +3871,7 @@ function renderLenderTrustReport() {
   const blockerSummary = report?.blocker_summary || "Manual verification required before financing decision.";
   const requiredNextSteps = report?.required_next_steps || "Resolve contested claims, verify filed evidence, and refresh the lender trust report.";
   const evidenceTrustLevel = report?.evidence_trust_level || "Low";
+  const merged = state.mergedCompliance[state.selectedProjectId];
   const controversies = currentProjectVerification(state.controversies);
   const reportClaims = currentProjectVerification(state.reportClaims);
   const contestedClaims = reportClaims.filter((claim) => {
@@ -3663,11 +3879,18 @@ function renderLenderTrustReport() {
     return status.includes("contradicted") || status.includes("disputed") || status.includes("manual");
   });
   const verifiedClaims = reportClaims.filter((claim) => String(claim.verification_status || "").toLowerCase().includes("verified"));
+  const documentOnlyClaims = reportClaims.filter((claim) => String(claim.verification_status || "document_claim_only").toLowerCase() === "document_claim_only");
+  const supportedClaims = reportClaims.filter((claim) => String(claim.verification_status || "").toLowerCase().includes("supported"));
+  const rejectedClaims = reportClaims.filter((claim) => /rejected|disputed/.test(String(claim.verification_status || "").toLowerCase()));
   const manualPending = currentProjectVerification(state.manualTasks).filter((item) => ["open", "unresolved"].includes(String(item.status || "open").toLowerCase()));
   const blockers = projectItems("findings").filter((item) => ["Critical", "High"].includes(item.severity) && item.status !== "Closed").slice(0, 3);
   node.innerHTML = `
     ${projectRoomHeader("trust-report")}
     ${pageHeader("Lender Trust Report", "Manual verification required before financing.", "Credit risk memo")}
+    <section class="print-report-title">
+      <h1>HydroComply Nepal Lender Trust Report</h1>
+      <p>${escapeHtml(project().name)} - Generated ${new Date().toLocaleDateString()}</p>
+    </section>
     <section class="panel financing-gate-panel">
       <span>Financing Gate</span>
       <strong>${escapeHtml(financingGate)}</strong>
@@ -3692,13 +3915,29 @@ function renderLenderTrustReport() {
         <strong>${escapeHtml(financingGate)}</strong>
       </div>
     </section>
-    <div class="toolbar lender-print-actions"><button class="btn primary" type="button" data-print-report>Print / Save PDF</button></div>
+    <div class="toolbar lender-print-actions"><button class="btn primary" type="button" data-print-report>Print Report</button><button class="btn" type="button" data-copy-trust-summary>Copy Summary</button></div>
     <section class="metric-grid four compact-metrics">
       ${metricCard("Document score", readinessText(metrics.readiness))}
       ${metricCard("Evidence trust", evidenceTrustLevel)}
       ${metricCard("Community validation", report?.community_validation_score ?? "Pending")}
       ${metricCard("Worker validation", report?.worker_validation_score ?? "Pending")}
     </section>
+    <section class="panel">
+      <div class="panel-header compact"><div><h3>Project Metadata</h3><p>${escapeHtml(project().description || "Project profile")}</p></div></div>
+      <div class="grid three">
+        ${detail("Capacity", project().capacity || "Pending")}
+        ${detail("River", project().river || "Pending")}
+        ${detail("District", project().district || "Pending")}
+        ${detail("Promoter", project().promoter || "Pending")}
+        ${detail("Status", project().status || "Pending")}
+        ${detail("Generated", new Date().toLocaleDateString())}
+      </div>
+    </section>
+    <section class="panel">
+      <div class="panel-header compact"><div><h3>PS1-PS8 Merged Compliance Summary</h3><p>${escapeHtml(merged?.coverage_note || "Project-level merged compliance appears after document analysis.")}</p></div></div>
+      ${compactTable(["Standard", "Score", "Risk", "Source", "Main gap"], (merged?.standards || standards.map((item) => ({ standard: item.code, score: selectedScores()?.[item.code] ?? null, risk_level: statusForScore(selectedScores()?.[item.code]), source_document_name: null, main_gap: "Project-level source pending." }))).map((item) => `<tr><td>${escapeHtml(item.standard)}</td><td>${item.score == null ? "Insufficient" : escapeHtml(item.score)}</td><td>${statusPill(item.risk_level || item.analysis_status || "Pending")}</td><td>${escapeHtml(item.source_document_name || "Insufficient evidence")}</td><td>${escapeHtml(item.main_gap || item.summary || "")}</td></tr>`), "No merged compliance yet.")}
+    </section>
+    ${renderScoreTrendSection(true)}
     <section class="panel">
       <div class="panel-header compact"><div><h3>Contested claims requiring verification</h3><p>Report claims stay untrusted until field feedback or manual review resolves them. Community feedback contradicts the report claim.</p></div><button class="btn" type="button" data-tab-view="controversies">View all</button></div>
       ${compactTable(["Standard", "Report claim", "Verification signal", "Status"], (contestedClaims.length ? contestedClaims : reportClaims.slice(0, 3)).map((claim) => `<tr><td>${escapeHtml(claim.standard || "IFC")}</td><td>${escapeHtml(claim.claim_text || "Claim pending extraction")}</td><td>${escapeHtml(verificationSourceForClaim(claim.verification_status))}</td><td>${statusPill(claim.verification_status || "document_claim_only", claim.verification_status === "contradicted_by_feedback" ? "amber" : "blue")}</td></tr>`), "No extracted report claims yet.")}
@@ -3707,17 +3946,32 @@ function renderLenderTrustReport() {
     <section class="panel">
       <div class="metric-grid four compact-metrics">
         ${metricCard("Claims extracted", reportClaims.length)}
-        ${metricCard("Claims verified", verifiedClaims.length)}
+        ${metricCard("Document claim only", documentOnlyClaims.length)}
+        ${metricCard("Supported claims", supportedClaims.length)}
+        ${metricCard("Contested claims", contestedClaims.length + rejectedClaims.length)}
+      </div>
+      <div class="metric-grid four compact-metrics" style="margin-top:14px">
+        ${metricCard("Manually verified", verifiedClaims.length)}
+        ${metricCard("Unresolved claims", reportClaims.length - verifiedClaims.length - rejectedClaims.length)}
         ${metricCard("Feedback received", projectItems("grievances").length + state.validationSubmissions.length)}
         ${metricCard("Manual checks pending", manualPending.length || controversies.length || blockers.length)}
       </div>
       ${accordion("Why this score?", `<p>${escapeHtml(report?.summary || "Some IFC standards remain unverified or insufficiently evidenced.")}</p>`)}
       ${accordion("Required next steps", `<p>${escapeHtml(requiredNextSteps)}</p>`)}
     </section>
+    <section class="panel">
+      <div class="panel-header compact"><div><h3>Audit Trail Preview</h3><p>Recent project accountability events.</p></div></div>
+      <div class="audit-timeline compact">${(projectItems("auditLogs").length ? projectItems("auditLogs") : state.auditLogs).slice(0, 4).map(renderAuditTimelineItem).join("") || empty("No audit events yet.")}</div>
+    </section>
     <div class="toolbar"><button class="btn" type="button" data-refresh-verification>Refresh</button></div>
   `;
   node.querySelector("[data-refresh-verification]")?.addEventListener("click", () => loadVerificationData());
   node.querySelector("[data-print-report]")?.addEventListener("click", () => window.print());
+  node.querySelector("[data-copy-trust-summary]")?.addEventListener("click", () => {
+    const summary = `${project().name} trust score ${trustScore}/100. Risk: ${risk}. Recommendation: ${financingGate}. ${blockerSummary}`;
+    navigator.clipboard?.writeText(summary);
+    toast("Trust report summary copied.");
+  });
   bindProjectRoomControls();
 }
 
@@ -3940,5 +4194,10 @@ function toast(message) {
 setupChrome();
 document.body.dataset.view = "dashboard";
 render();
-navigate("publicHome");
+if (new URLSearchParams(window.location.search).get("project_id")) {
+  state.selectedProjectId = validationFlow.projectId;
+  navigate("community");
+} else {
+  navigate("publicHome");
+}
 loadBackendProjectData();

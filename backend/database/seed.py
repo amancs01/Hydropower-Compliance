@@ -326,6 +326,11 @@ def ensure_seed_schema():
             if column_name not in analysis_columns:
                 connection.execute(text(f"ALTER TABLE compliance_analyses ADD COLUMN {column_name} INTEGER"))
 
+        if "compliance_standard_results" in inspector.get_table_names():
+            standard_result_columns = {column["name"] for column in inspector.get_columns("compliance_standard_results")}
+            if "document_id" not in standard_result_columns:
+                connection.execute(text("ALTER TABLE compliance_standard_results ADD COLUMN document_id VARCHAR(80)"))
+
         if "compliance_findings" in inspector.get_table_names():
             finding_columns = {column["name"] for column in inspector.get_columns("compliance_findings")}
             for column_name, column_type in {
@@ -379,6 +384,10 @@ def ensure_seed_schema():
                     connection.execute(text(f"ALTER TABLE lender_trust_reports ADD COLUMN {column_name} {column_type}"))
 
         snapshot_columns = inspector.get_columns("score_snapshots")
+        snapshot_column_names = {column["name"] for column in snapshot_columns}
+        for column_name in ["ps2_score", "ps3_score", "ps4_score", "ps6_score", "ps8_score"]:
+            if column_name not in snapshot_column_names:
+                connection.execute(text(f"ALTER TABLE score_snapshots ADD COLUMN {column_name} INTEGER"))
         needs_snapshot_rebuild = any(
             column["name"] in {"ps1_score", "ps5_score", "ps7_score", "overall_score", "risk_level"}
             and not column.get("nullable", True)
@@ -391,8 +400,13 @@ def ensure_seed_schema():
                     project_id VARCHAR(80) NOT NULL,
                     analysis_id VARCHAR(80),
                     ps1_score INTEGER,
+                    ps2_score INTEGER,
+                    ps3_score INTEGER,
+                    ps4_score INTEGER,
                     ps5_score INTEGER,
+                    ps6_score INTEGER,
                     ps7_score INTEGER,
+                    ps8_score INTEGER,
                     overall_score INTEGER,
                     risk_level VARCHAR(50),
                     reason_for_change TEXT NOT NULL,
@@ -403,11 +417,11 @@ def ensure_seed_schema():
             """))
             connection.execute(text("""
                 INSERT INTO score_snapshots_new (
-                    id, project_id, analysis_id, ps1_score, ps5_score, ps7_score,
+                    id, project_id, analysis_id, ps1_score, ps2_score, ps3_score, ps4_score, ps5_score, ps6_score, ps7_score, ps8_score,
                     overall_score, risk_level, reason_for_change, created_at
                 )
                 SELECT
-                    id, project_id, analysis_id, ps1_score, ps5_score, ps7_score,
+                    id, project_id, analysis_id, ps1_score, ps2_score, ps3_score, ps4_score, ps5_score, ps6_score, ps7_score, ps8_score,
                     overall_score, risk_level, reason_for_change, created_at
                 FROM score_snapshots
             """))

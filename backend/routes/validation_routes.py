@@ -5,9 +5,12 @@ from database.connection import get_db
 from database.models import (
     ControversyFlag,
     AuditLog,
+    Grievance,
     LenderTrustReport,
     ManualVerificationNote,
     ManualVerificationTask,
+    Project,
+    ScoreSnapshot,
     ValidationQuestion,
     ValidationResponse,
     ValidationSubmission,
@@ -113,6 +116,13 @@ def submit_validation_responses(project_id: str, payload: ValidationSubmissionCr
     ))
     controversies = detect_controversies(db, project_id, responses_with_questions)
     trust_report = build_lender_trust_report(db, project_id)
+    if controversies:
+        db.add(ScoreSnapshot(
+            project_id=project_id,
+            overall_score=trust_report.final_trust_score,
+            risk_level=trust_report.final_risk_level,
+            reason_for_change="Validation response received; controversy created",
+        ))
     db.add(AuditLog(
         project_id=project_id,
         actor="HydroComply trust engine",
@@ -228,6 +238,14 @@ def add_manual_verification_note(
         entity_id=note.id,
         detail=f"Decision: {payload.decision}.",
     ))
+    if task.status in {"completed", "unresolved"}:
+        report = build_lender_trust_report(db, task.project_id)
+        db.add(ScoreSnapshot(
+            project_id=task.project_id,
+            overall_score=report.final_trust_score,
+            risk_level=report.final_risk_level,
+            reason_for_change="Manual verification completed",
+        ))
     db.commit()
     db.refresh(note)
     return row_to_dict(note)
@@ -259,3 +277,40 @@ def get_lender_trust_report(
         db.commit()
         db.refresh(report)
     return row_to_dict(report)
+
+
+@router.get("/public/status/{reference_number}")
+def get_public_status(reference_number: str, db: Session = Depends(get_db)):
+    grievance = db.query(Grievance).filter(Grievance.reference_number == reference_number).first()
+    if grievance:
+        project = db.query(Project).filter(Project.id == grievance.project_id).first()
+        return {
+            "reference_number": grievance.reference_number,
+            "record_type": "grievance",
+            "project_name": project.name if project else "Project",
+            "status": grievance.status,
+            "category": grievance.category,
+            "submitted_at": grievance.created_at.isoformat() if grievance.created_at else None,
+            "latest_update": "Your concern is under review." if grievance.status not in {"closed", "resolved"} else "This concern has been closed.",
+            "next_step": "Project team must respond." if grievance.status not in {"closed", "resolved"} else "No further action is currently listed.",
+        }
+
+    submission = db.query(ValidationSubmission).filter(ValidationSubmission.reference_number == reference_number).first()
+    if submission:
+        project = db.query(Project).filter(Project.id == submission.project_id).first()
+        return {
+            "reference_number": submission.reference_number,
+            "record_type": "validation_submission",
+            "project_name": project.name if project else "Project",
+            "status": submission.status,
+            "category": submission.respondent_type,
+            "submitted_at": submission.created_at.isoformat() if submission.created_at else None,
+            "latest_update": "Your validation response has been received and may be reviewed against project reports.",
+            "next_step": "Project team must review any contested claims.",
+        }
+
+    return {
+        "status": "error",
+        "error_code": "NOT_FOUND",
+        "message": "No record found for this reference number.",
+    }

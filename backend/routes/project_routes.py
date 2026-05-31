@@ -7,6 +7,7 @@ from database.models import (
     AuditLog,
     ComplianceAnalysis,
     ComplianceFinding,
+    Document,
     EvidenceItem,
     Grievance,
     Project,
@@ -26,6 +27,7 @@ from database.schemas import (
 )
 from services.audit_service import add_audit_log
 from services.auth_service import require_roles
+from services.project_compliance_merge_service import merged_project_compliance
 
 
 router = APIRouter(prefix="/api/projects", tags=["projects"])
@@ -117,6 +119,30 @@ def get_project_findings(
     return [row_to_dict(row) for row in rows]
 
 
+@router.get("/{project_id}/documents")
+def get_project_documents(
+    project_id: str,
+    db: Session = Depends(get_db),
+    user=Depends(require_roles(["Developer", "Consultant", "Lender", "Regulator", "Admin"])),
+):
+    rows = (
+        db.query(Document)
+        .filter(Document.project_id == project_id)
+        .order_by(Document.created_at.desc())
+        .all()
+    )
+    return [row_to_dict(row) for row in rows]
+
+
+@router.get("/{project_id}/compliance/merged")
+def get_project_merged_compliance(
+    project_id: str,
+    db: Session = Depends(get_db),
+    user=Depends(require_roles(["Developer", "Consultant", "Lender", "Regulator", "Admin"])),
+):
+    return merged_project_compliance(db, project_id)
+
+
 @router.post("/{project_id}/findings")
 def create_project_finding(
     project_id: str,
@@ -139,7 +165,25 @@ def get_project_score_history(
     user=Depends(require_roles(["Developer", "Consultant", "Lender", "Regulator", "Admin"])),
 ):
     rows = db.query(ScoreSnapshot).filter(ScoreSnapshot.project_id == project_id).order_by(ScoreSnapshot.created_at).all()
-    return [row_to_dict(row) for row in rows]
+    return {
+        "project_id": project_id,
+        "snapshots": [
+            {
+                **row_to_dict(row),
+                "ps_scores": {
+                    "PS1": row.ps1_score,
+                    "PS2": getattr(row, "ps2_score", None),
+                    "PS3": getattr(row, "ps3_score", None),
+                    "PS4": getattr(row, "ps4_score", None),
+                    "PS5": row.ps5_score,
+                    "PS6": getattr(row, "ps6_score", None),
+                    "PS7": row.ps7_score,
+                    "PS8": getattr(row, "ps8_score", None),
+                },
+            }
+            for row in rows
+        ],
+    }
 
 
 @router.post("/{project_id}/score-snapshots")

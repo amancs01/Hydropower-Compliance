@@ -100,8 +100,13 @@ class VerificationReviewCreate(BaseModel):
 class ScoreSnapshotCreate(BaseModel):
     analysis_id: Optional[str] = None
     ps1_score: Optional[int] = None
+    ps2_score: Optional[int] = None
+    ps3_score: Optional[int] = None
+    ps4_score: Optional[int] = None
     ps5_score: Optional[int] = None
+    ps6_score: Optional[int] = None
     ps7_score: Optional[int] = None
+    ps8_score: Optional[int] = None
     overall_score: Optional[int] = None
     risk_level: Optional[str] = None
     reason_for_change: str

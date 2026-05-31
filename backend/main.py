@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 
 from config import settings
 from database.connection import get_db
-from database.models import Action, AuditLog, ComplianceAnalysis, ComplianceFinding, ComplianceStandardResult, Document, DocumentChunk, IFCRequirement, Project, ReportClaim
+from database.models import Action, AuditLog, ComplianceAnalysis, ComplianceFinding, ComplianceStandardResult, Document, DocumentChunk, IFCRequirement, Project, ReportClaim, ScoreSnapshot
 from database.seed import ensure_seed_schema
 from routes import action_routes, audit_routes, auth_routes, evidence_routes, grievance_routes, project_routes, validation_routes
 from services.auth_service import require_roles
@@ -327,6 +327,7 @@ async def analyze_compliance_pdf(
         result_payload = {
             "project_id": project.id,
             "analysis_id": analysis.id,
+            "document_id": document.id,
             "standard": standard,
             "score": finding.score,
             "severity": finding.severity,
@@ -414,6 +415,21 @@ async def analyze_compliance_pdf(
             entity_id=str(analysis.id),
             detail=f"{len(created_actions)} AI-created corrective actions linked to critical/high/medium findings.",
         ))
+    db.add(ScoreSnapshot(
+        project_id=project.id,
+        analysis_id=analysis.id,
+        ps1_score=scores["ps1"],
+        ps2_score=scores["ps2"],
+        ps3_score=scores["ps3"],
+        ps4_score=scores["ps4"],
+        ps5_score=scores["ps5"],
+        ps6_score=scores["ps6"],
+        ps7_score=scores["ps7"],
+        ps8_score=scores["ps8"],
+        overall_score=scores["overall"],
+        risk_level=scores["risk_level"],
+        reason_for_change="AI analysis completed",
+    ))
     db.commit()
 
     analyzed_count = len([finding for finding in findings if finding.get("analysis_status") == "analyzed" and finding.get("score") is not None])

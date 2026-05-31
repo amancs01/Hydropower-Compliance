@@ -138,6 +138,67 @@ http://127.0.0.1:8000/docs
 
 ---
 
+## MVP Workflow
+
+### Multi-document analysis
+
+Select a project before uploading. Each PDF creates its own `documents` row and its own `compliance_analyses` row, so uploading a RAP, biodiversity report, monitoring report, or labor/OHS report does not overwrite earlier EIA/IEE analysis.
+
+The project-level merged compliance endpoint is:
+
+```http
+GET /api/projects/{project_id}/compliance/merged
+```
+
+For each IFC standard PS1-PS8, HydroComply chooses the strongest available result for the project, preferring manually verified results, then higher-confidence AI results, then the latest analyzed result. The PS Matrix and Lender Trust Report show the merged project status and source document for each standard.
+
+### Lender Trust Report print/export
+
+Open the Lender Trust Report and use **Print Report**. The app uses browser print/save-as-PDF with print CSS that hides navigation, buttons, and sidebars while keeping project metadata, trust score, funding recommendation, merged PS1-PS8 summary, claims, contested claims, manual verification status, evidence status, audit preview, trend, and generated date.
+
+### Public status lookup
+
+Community and worker users can check a grievance or validation receipt by reference number:
+
+```http
+GET /api/public/status/{reference_number}
+```
+
+The response shows only safe public fields: reference number, project name, status, category, submitted date, latest update, and next step. It does not expose identities, confidential notes, or internal audit details.
+
+### Project validation link and QR
+
+Each project has a validation URL:
+
+```text
+{FRONTEND_BASE_URL}/?project_id={project_id}
+```
+
+Opening the link preselects that project in the validation portal. The Validation workspace shows the copyable link and a QR-style placeholder box for demo posting at project sites, ward offices, worker camps, and community meetings.
+
+### Score trend chart
+
+Score changes are stored in `ScoreSnapshot` after major events: AI analysis, validation responses that create controversies, and manual verification completion.
+
+```http
+GET /api/projects/{project_id}/score-history
+```
+
+The frontend shows a Compliance Trend chart when there are at least two snapshots. With fewer snapshots it shows: "Trend will appear after more analyses or verification events."
+
+### Report claims remain untrusted
+
+Extracted report claims start as `document_claim_only`. A claim is not trusted just because it appears in an EIA, ESMP, RAP, or monitoring report. Claims become supported only through ground feedback or manual review, become contested when feedback contradicts them, and can be manually verified or disputed through verification tasks.
+
+The Report Claims and Lender Trust Report separate document-only, supported, contested, manually verified, rejected/disputed, and unresolved claims.
+
+### Current MVP limits
+
+- OCR is not implemented yet. AI analysis supports selectable-text PDFs; scanned/image PDFs return an OCR-required message.
+- SMS/IVR, FPIC consent engine, affected-household registry, DOED/AEPC/MOFE integrations, blockchain, and satellite monitoring are roadmap items, not part of this MVP.
+
+---
+
 ## Local CORS and Demo Auth
 
 Recommended `.env` settings for local demo:
@@ -188,6 +249,7 @@ Public endpoints:
 
 - `GET /health`
 - `GET /api/health`
+- `GET /api/public/status/{reference_number}`
 - validation screening/questions
 - validation response submission
 - public grievance submission
