@@ -108,7 +108,11 @@ def create_project_baseline(
 
 
 @router.get("/{project_id}/findings")
-def get_project_findings(project_id: str, db: Session = Depends(get_db)):
+def get_project_findings(
+    project_id: str,
+    db: Session = Depends(get_db),
+    user=Depends(require_roles(["Developer", "Consultant", "Lender", "Regulator", "Admin"])),
+):
     rows = db.query(ComplianceFinding).filter(ComplianceFinding.project_id == project_id).all()
     return [row_to_dict(row) for row in rows]
 
@@ -129,7 +133,11 @@ def create_project_finding(
 
 
 @router.get("/{project_id}/score-history")
-def get_project_score_history(project_id: str, db: Session = Depends(get_db)):
+def get_project_score_history(
+    project_id: str,
+    db: Session = Depends(get_db),
+    user=Depends(require_roles(["Developer", "Consultant", "Lender", "Regulator", "Admin"])),
+):
     rows = db.query(ScoreSnapshot).filter(ScoreSnapshot.project_id == project_id).order_by(ScoreSnapshot.created_at).all()
     return [row_to_dict(row) for row in rows]
 

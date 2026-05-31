@@ -6,13 +6,18 @@ from database.models import Grievance
 from database.schemas import GrievanceCreate
 from routes.project_routes import row_to_dict
 from services.audit_service import add_audit_log
+from services.auth_service import require_roles
 
 
 router = APIRouter(prefix="/api/projects", tags=["grievances"])
 
 
 @router.get("/{project_id}/grievances")
-def get_project_grievances(project_id: str, db: Session = Depends(get_db)):
+def get_project_grievances(
+    project_id: str,
+    db: Session = Depends(get_db),
+    user=Depends(require_roles(["Developer", "Consultant", "Lender", "Regulator", "Community Liaison", "Admin"])),
+):
     rows = db.query(Grievance).filter(Grievance.project_id == project_id).all()
     return [row_to_dict(row) for row in rows]
 

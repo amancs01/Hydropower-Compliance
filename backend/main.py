@@ -6,6 +6,7 @@ from datetime import datetime, timedelta
 from fastapi import Depends, FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from config import settings
@@ -50,6 +51,8 @@ app.include_router(validation_routes.router)
 
 @app.on_event("startup")
 def startup():
+    if settings.demo_jwt_secret == "change-this-in-production":
+        logger.warning("DEMO_JWT_SECRET is using the default demo value. Do not use this in production.")
     ensure_seed_schema()
 
 
@@ -145,8 +148,18 @@ def health():
 
 
 @app.get("/api/health")
-def api_health():
-    return {"status": "ok"}
+def api_health(db: Session = Depends(get_db)):
+    database_connected = True
+    try:
+        db.execute(text("SELECT 1"))
+    except Exception:
+        database_connected = False
+    return {
+        "status": "ok" if database_connected else "degraded",
+        "app_version": app.version,
+        "database_connected": database_connected,
+        "ai_provider_configured": bool(settings.groq_api_key),
+    }
 
 
 @app.post("/api/pdf/extract", response_model=PdfExtractResponse)
@@ -445,6 +458,11 @@ def get_analysis(
     )
     source_rows = standard_results or analysis.findings
     findings = [stored_finding_to_response(finding) for finding in source_rows]
+    analyzed_count = len([
+        finding for finding in findings
+        if finding.get("analysis_status") == "analyzed" and finding.get("score") is not None
+    ])
+    overall_confidence = "low" if analyzed_count <= 3 else "medium" if analyzed_count <= 6 else "high"
     report_claims = (
         db.query(ReportClaim)
         .filter(ReportClaim.analysis_id == analysis.id)
@@ -510,12 +528,22 @@ def stored_finding_to_response(finding):
         "confidence": getattr(finding, "confidence", 0),
         "title": finding.title,
         "summary": getattr(finding, "summary", "") or finding.description or finding.title,
-        "missing_requirements": json.loads(finding.missing_requirements_json),
-        "partial_compliance": json.loads(finding.partial_compliance_json),
-        "risks": json.loads(finding.risks_json),
-        "recommended_actions": json.loads(finding.recommended_actions_json),
-        "evidence": json.loads(finding.evidence_json),
+        "missing_requirements": safe_json_list(finding.missing_requirements_json),
+        "partial_compliance": safe_json_list(finding.partial_compliance_json),
+        "risks": safe_json_list(finding.risks_json),
+        "recommended_actions": safe_json_list(finding.recommended_actions_json),
+        "evidence": safe_json_list(finding.evidence_json),
     }
+
+
+def safe_json_list(value):
+    if not value:
+        return []
+    try:
+        parsed = json.loads(value)
+    except (TypeError, ValueError, json.JSONDecodeError):
+        return []
+    return parsed if isinstance(parsed, list) else []
 
 
 def document_to_response(document: Document):

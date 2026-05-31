@@ -13,7 +13,11 @@ router = APIRouter(prefix="/api/projects", tags=["actions"])
 
 
 @router.get("/{project_id}/actions")
-def get_project_actions(project_id: str, db: Session = Depends(get_db)):
+def get_project_actions(
+    project_id: str,
+    db: Session = Depends(get_db),
+    user=Depends(require_roles(["Developer", "Consultant", "Lender", "Regulator", "Community Liaison", "Admin"])),
+):
     rows = db.query(Action).filter(Action.project_id == project_id).all()
     return [row_to_dict(row) for row in rows]
 
